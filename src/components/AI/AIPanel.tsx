@@ -149,9 +149,19 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
 
     const fetchOllamaModels = async (endpoint: string) => {
         try {
-            const response = await fetch(`${endpoint}/api/tags`);
-            if (!response.ok) throw new Error('Failed to fetch models');
-            const data = await response.json();
+            let data;
+            try {
+                // Try direct first
+                const response = await fetch(`${endpoint}/api/tags`);
+                if (!response.ok) throw new Error('Direct fetch failed');
+                data = await response.json();
+            } catch (e) {
+                console.warn('Direct fetch failed, trying proxy...', e);
+                // Try proxy
+                const response = await fetch(`http://localhost:3001/api/proxy/ollama/tags?endpoint=${encodeURIComponent(endpoint)}`);
+                if (!response.ok) throw new Error('Proxy fetch failed');
+                data = await response.json();
+            }
 
             const ollamaModels = data.models.map((m: any) => ({
                 id: `ollama-${m.name}`,
@@ -176,10 +186,14 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             setHasKey(true);
             setAgentStatus(`Fetched ${ollamaModels.length} local models!`);
 
-            // If no messages, add a welcome message
-            if (messages.length === 1 && messages[0].role === 'ai' && messages[0].content.includes('Please enter your')) {
-                setMessages([{ role: 'ai', content: `Connected to Ollama at ${endpoint}. Found ${ollamaModels.length} models. How can I help?` }]);
-            }
+            // If no messages or just a welcome message, show success
+            setMessages(prev => {
+                const isWelcome = prev.length === 0 || (prev.length === 1 && prev[0].role === 'ai');
+                if (isWelcome) {
+                    return [{ role: 'ai', content: `Connected to Ollama at ${endpoint}. Found ${ollamaModels.length} models. How can I help?` }];
+                }
+                return prev;
+            });
 
             setTimeout(() => setAgentStatus(null), 3000);
         } catch (error) {

@@ -105,6 +105,40 @@ app.post('/api/execute', (req, res) => {
     }
 });
 
+// --- Ollama Proxy ---
+
+app.get('/api/proxy/ollama/tags', async (req, res) => {
+    const { endpoint } = req.query;
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint required' });
+
+    try {
+        const response = await fetch(`${endpoint}/api/tags`);
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/proxy/ollama/chat', async (req, res) => {
+    const { endpoint, ...body } = req.body;
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint required' });
+
+    try {
+        const response = await fetch(`${endpoint}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        // Stream the response
+        response.body.pipe(res);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // --- WebSocket / PTY (Interactive Sessions) ---
 
 io.on('connection', (socket) => {

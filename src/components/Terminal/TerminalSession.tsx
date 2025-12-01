@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Block } from './Block';
 import { InputArea } from './InputArea';
 import { InteractiveBlock } from './InteractiveBlock';
+import { Dashboard } from './Dashboard';
 import type { BlockData } from '../../types';
 import { executeCommand, cancelCommand } from '../../utils/commandRunner';
 import styles from './TerminalSession.module.css';
@@ -198,11 +199,7 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
         <div className={styles.container}>
             <div className={styles.scrollArea} ref={scrollRef}>
                 {blocks.length === 0 && (
-                    <div className={styles.welcomeMessage}>
-                        <div className={styles.welcomeTitle}>Welcome to TermAI</div>
-                        <p>Your new terminal buddy.</p>
-                        <p>Try running <code>ls</code>, <code>help</code>, or ask AI with <code>#</code>.</p>
-                    </div>
+                    <Dashboard onCommand={handleExecute} />
                 )}
                 {blocks.map(block => (
                     block.isInteractive ? (

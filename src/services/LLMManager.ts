@@ -137,31 +137,47 @@ export class OllamaProvider implements LLMProvider {
     }
 
     async chat(message: string, context?: string): Promise<string> {
+        const payload = {
+            model: this.modelId,
+            messages: [
+                { role: 'system', content: context || 'You are a helpful assistant.' },
+                { role: 'user', content: message }
+            ],
+            stream: false
+        };
+
         try {
+            // Try direct connection first
             const response = await fetch(`${this.baseUrl}/api/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: this.modelId,
-                    messages: [
-                        { role: 'system', content: context || 'You are a helpful assistant.' },
-                        { role: 'user', content: message }
-                    ],
-                    stream: false
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
             });
 
-            if (!response.ok) {
-                throw new Error(`Ollama API error: ${response.statusText}`);
-            }
-
+            if (!response.ok) throw new Error(`Direct connection failed: ${response.statusText}`);
             const data = await response.json();
             return data.message?.content || 'No response from Ollama.';
-        } catch (error) {
-            console.error('Error calling Ollama API:', error);
-            throw error;
+        } catch (directError) {
+            console.warn('Direct Ollama connection failed, trying proxy...', directError);
+
+            try {
+                // Try via proxy
+                const response = await fetch('http://localhost:3001/api/proxy/ollama/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        endpoint: this.baseUrl,
+                        ...payload
+                    }),
+                });
+
+                if (!response.ok) throw new Error(`Proxy connection failed: ${response.statusText}`);
+                const data = await response.json();
+                return data.message?.content || 'No response from Ollama via Proxy.';
+            } catch (proxyError) {
+                console.error('Error calling Ollama API (Direct & Proxy):', proxyError);
+                throw proxyError;
+            }
         }
     }
 }

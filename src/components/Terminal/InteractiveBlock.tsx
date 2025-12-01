@@ -84,8 +84,36 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({ command, cwd
     }, []);
 
     return (
-        <div className={styles.container}>
-            <div className={styles.terminal} ref={terminalRef} />
+        <div className={styles.wrapper}>
+            {/* Context Row */}
+            <div className={styles.contextRow}>
+                <span className={styles.contextPath}>{cwd}</span>
+                <span className={styles.contextGit}>git:(main)</span>
+                <span className={styles.contextTime}>(0.032s)</span>
+            </div>
+
+            {/* Command Row */}
+            <div className={styles.commandRow}>
+                <span className={styles.commandText}>{command}</span>
+            </div>
+
+            {/* Terminal Output */}
+            <div className={styles.terminalContainer}>
+                <div className={styles.terminal} ref={terminalRef} />
+            </div>
+
+            {/* Footer */}
+            <div className={styles.footer}>
+                <div className={styles.footerHeader}>
+                    <span className={styles.footerIcon}>⚡</span>
+                    <span className={styles.footerTitle}>Session Warped</span>
+                    <a href="#" className={styles.footerLink}>Learn more</a>
+                </div>
+                <div className={styles.successBlock}>
+                    <div className={styles.checkIcon}>✓</div>
+                    <span className={styles.successText}>{command}</span>
+                </div>
+            </div>
         </div>
     );
 };
