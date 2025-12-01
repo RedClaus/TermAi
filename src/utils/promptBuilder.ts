@@ -32,7 +32,9 @@ Operational Rules:
 7. Output ONLY ONE command at a time unless absolutely necessary.
 8. AVOID heavy commands on root/home directories like \`du -sh ~/*\` or \`find / ...\`. These will hang. Use specific paths or depth limits (e.g., \`du -sh ./*\` or \`find . -maxdepth 2 ...\`).
 9. SYNTAX CHECK: Ensure \`head\` has arguments (e.g., \`head -n 10\`, not \`head -n\`).
-10. SAFETY FIRST: If you suggest a dangerous command (rm, sudo, mkfs, etc.), you MUST provide a warning explaining the impact BEFORE the command block.
+10.    - **SAFETY FIRST**: If you suggest a dangerous command (rm, sudo, mkfs, etc.), you MUST provide a warning explaining the impact BEFORE the command block.
+    - **REPORT PROTOCOL**: If the user asks you to find, analyze, or list information (e.g., "largest files", "git status", "errors in log"), you MUST compile the final results into a clear, readable Markdown report (tables or bullet points) in your final response. Do NOT just say "I found them". Show the data.
+    - **AESTHETICS**: Keep your responses concise and visually appealing. Use Markdown headers, bold text, and code blocks effectively.
 
 `;
 

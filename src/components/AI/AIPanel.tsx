@@ -214,7 +214,17 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
 
     const loadSettings = () => {
         const storedProvider = localStorage.getItem('termai_provider') || 'gemini';
-        const storedKey = localStorage.getItem(`termai_${storedProvider}_key`);
+        let storedKey = localStorage.getItem(`termai_${storedProvider}_key`);
+
+        // Default for Ollama if not set
+        if (storedProvider === 'ollama') {
+            if (!storedKey) {
+                storedKey = 'http://localhost:11434';
+                localStorage.setItem('termai_ollama_key', storedKey);
+            }
+            // Fetch models on startup to ensure we have the latest from the custom endpoint
+            fetchOllamaModels(storedKey);
+        }
 
         if (storedKey) {
             setApiKey(storedKey);
@@ -224,7 +234,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             const storedHistory = localStorage.getItem(historyKey);
             if (storedHistory) {
                 setMessages(JSON.parse(storedHistory));
-            } else if (messages.length === 1 && messages[0].role === 'ai') {
+            } else {
+                // Reset to default if no history for this session
                 setMessages([{ role: 'ai', content: 'Hi! I\'m TermAI. How can I help you with your terminal commands today?' }]);
             }
         } else {
@@ -260,7 +271,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             window.removeEventListener('termai-cwd-changed' as any, handleCwdChange as any);
             window.removeEventListener('termai-fetch-models' as any, handleFetchModels as any);
         };
-    }, [isOpen]);
+    }, [isOpen, sessionId]);
 
     // Persist messages
     useEffect(() => {
@@ -295,11 +306,14 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             // if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
 
             // Add system output to chat
-            let outputMsg = `Command executed: \`${command}\`\nExit Code: ${exitCode}\nOutput:\n\`\`\`\n${output.substring(0, 1000)}${output.length > 1000 ? '...' : ''}\n\`\`\``;
+            let outputMsg = `> Executed: \`${command}\` (Exit: ${exitCode})\n\nOutput:\n\`\`\`\n${output.substring(0, 1000)}${output.length > 1000 ? '...' : ''}\n\`\`\``;
 
             // Intelligent Backtracking Trigger
-            if (exitCode !== 0) {
+            if (isAutoRun && exitCode !== 0) {
                 outputMsg += `\n\n⚠️ Command Failed (Exit Code: ${exitCode}).\n\nAUTO-RECOVERY INITIATED:\n1. Review your last plan.\n2. Identify which step failed.\n3. Backtrack to the state before this step.\n4. Propose a DIFFERENT command to achieve the same goal. Do NOT repeat the failed command.`;
+            } else if (isAutoRun) {
+                // Success case - minimal noise
+                // We don't need to add anything extra for success, the AI will just see the output.
             }
 
             setMessages(prev => [...prev, { role: 'system', content: outputMsg }]);

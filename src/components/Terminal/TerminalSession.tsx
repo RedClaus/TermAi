@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Block } from './Block';
 import { InputArea } from './InputArea';
+import { InteractiveBlock } from './InteractiveBlock';
 import type { BlockData } from '../../types';
 import { executeCommand, cancelCommand } from '../../utils/commandRunner';
 import styles from './TerminalSession.module.css';
@@ -21,6 +22,9 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
         if (sessionId) {
             const storedCwd = localStorage.getItem(`termai_cwd_${sessionId}`);
             if (storedCwd) setCwd(storedCwd);
+
+            // Reset blocks for new session (unless we implement block persistence later)
+            setBlocks([]);
         }
     }, [sessionId]);
 
@@ -52,6 +56,8 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
         }
 
         const tempId = uuidv4();
+        const isInteractive = command.trim().startsWith('ssh');
+
         const pendingBlock: BlockData = {
             id: tempId,
             command,
@@ -59,7 +65,8 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
             cwd,
             timestamp: Date.now(),
             exitCode: 0,
-            isLoading: true
+            isLoading: true,
+            isInteractive
         };
 
         setBlocks(prev => [...prev, pendingBlock]);
@@ -75,6 +82,11 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
                 scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
             }
         }, 10);
+
+        if (isInteractive) {
+            // Interactive blocks handle their own execution via WebSocket
+            return;
+        }
 
         // Listen for cancel events for this specific command
         const handleCancel = (e: CustomEvent<{ commandId: string, sessionId?: string }>) => {
@@ -161,6 +173,27 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
         }
     }, [blocks]);
 
+    const handleInteractiveExit = (blockId: string, exitCode: number) => {
+        setBlocks(prev => prev.map(b =>
+            b.id === blockId
+                ? { ...b, isLoading: false, exitCode }
+                : b
+        ));
+
+        // Notify AI that interactive session finished
+        const block = blocks.find(b => b.id === blockId);
+        if (block) {
+            window.dispatchEvent(new CustomEvent('termai-command-finished', {
+                detail: {
+                    command: block.command,
+                    output: '[Interactive Session Finished]',
+                    exitCode,
+                    sessionId
+                }
+            }));
+        }
+    };
+
     return (
         <div className={styles.container}>
             <div className={styles.scrollArea} ref={scrollRef}>
@@ -172,7 +205,16 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
                     </div>
                 )}
                 {blocks.map(block => (
-                    <Block key={block.id} data={block} />
+                    block.isInteractive ? (
+                        <InteractiveBlock
+                            key={block.id}
+                            command={block.command}
+                            cwd={block.cwd}
+                            onExit={(code) => handleInteractiveExit(block.id, code)}
+                        />
+                    ) : (
+                        <Block key={block.id} data={block} />
+                    )
                 ))}
             </div>
             <InputArea onExecute={handleExecute} cwd={cwd} />

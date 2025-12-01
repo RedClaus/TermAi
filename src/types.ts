@@ -2,10 +2,11 @@ export interface BlockData {
     id: string;
     command: string;
     output: string;
-    timestamp: number;
     cwd: string;
+    timestamp: number;
     exitCode: number;
-    isLoading?: boolean;
+    isLoading: boolean;
+    isInteractive?: boolean;
 }
 
 export interface CommandResult {

@@ -4,8 +4,19 @@ const { exec } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
+const pty = require('node-pty');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
 const PORT = 3001;
 
 app.use(cors());
@@ -20,6 +31,8 @@ const expandHome = (p) => {
 };
 
 const activeProcesses = {};
+
+// --- REST API (Legacy/Simple Commands) ---
 
 app.post('/api/cancel', (req, res) => {
     const { commandId } = req.body;
@@ -92,6 +105,58 @@ app.post('/api/execute', (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+// --- WebSocket / PTY (Interactive Sessions) ---
+
+io.on('connection', (socket) => {
+    let ptyProcess = null;
+
+    socket.on('spawn', ({ command, cwd, cols, rows }) => {
+        const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+        const currentDir = cwd ? expandHome(cwd) : os.homedir();
+
+        try {
+            ptyProcess = pty.spawn(shell, ['-c', command], {
+                name: 'xterm-color',
+                cols: cols || 80,
+                rows: rows || 24,
+                cwd: currentDir,
+                env: process.env
+            });
+
+            ptyProcess.onData((data) => {
+                socket.emit('output', data);
+            });
+
+            ptyProcess.onExit(({ exitCode }) => {
+                socket.emit('exit', { exitCode });
+                ptyProcess = null;
+            });
+
+        } catch (error) {
+            socket.emit('output', `\r\nError spawning PTY: ${error.message}\r\n`);
+            socket.emit('exit', { exitCode: 1 });
+        }
+    });
+
+    socket.on('input', (data) => {
+        if (ptyProcess) {
+            ptyProcess.write(data);
+        }
+    });
+
+    socket.on('resize', ({ cols, rows }) => {
+        if (ptyProcess) {
+            ptyProcess.resize(cols, rows);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        if (ptyProcess) {
+            ptyProcess.kill();
+        }
+    });
+});
+
+server.listen(PORT, () => {
     console.log(`TermAI Backend running on http://localhost:${PORT}`);
 });
