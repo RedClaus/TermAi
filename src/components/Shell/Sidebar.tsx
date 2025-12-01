@@ -74,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             </div>
 
             <div className={styles.section}>
-                <div className={styles.sectionTitle}>Warp Drive</div>
+                <div className={styles.sectionTitle}>Tools</div>
                 <div className={styles.item}>
                     <Book className={styles.icon} />
                     <span>Notebooks</span>

@@ -20,7 +20,7 @@ export class LLMService {
             return response.text();
         } catch (error) {
             console.error('Error calling Gemini API:', error);
-            return 'Error: Failed to get response from Warp AI. Please check your API key.';
+            return 'Error: Failed to get response from TermAI. Please check your API key.';
         }
     }
 }

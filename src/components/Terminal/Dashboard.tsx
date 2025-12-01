@@ -28,7 +28,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCommand }) => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Warp anything e.g. Deploy my React app to Vercel and set up environment variables"
+                        placeholder="Ask TermAI anything e.g. Deploy my React app to Vercel and set up environment variables"
                         className={styles.textarea}
                         rows={1}
                     />

@@ -105,6 +105,71 @@ app.post('/api/execute', (req, res) => {
     }
 });
 
+// --- File System API (Agentic Capabilities) ---
+
+app.post('/api/fs/read', (req, res) => {
+    const { path: filePath } = req.body;
+    const targetPath = expandHome(filePath);
+
+    try {
+        if (!fs.existsSync(targetPath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        const content = fs.readFileSync(targetPath, 'utf-8');
+        res.json({ content });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/fs/write', (req, res) => {
+    const { path: filePath, content } = req.body;
+    const targetPath = expandHome(filePath);
+
+    try {
+        // Ensure parent directory exists
+        const dir = path.dirname(targetPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(targetPath, content, 'utf-8');
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/fs/list', (req, res) => {
+    const { path: dirPath } = req.body;
+    const targetPath = expandHome(dirPath || '.');
+
+    try {
+        if (!fs.existsSync(targetPath)) {
+            return res.status(404).json({ error: 'Directory not found' });
+        }
+        const files = fs.readdirSync(targetPath, { withFileTypes: true }).map(dirent => ({
+            name: dirent.name,
+            isDirectory: dirent.isDirectory(),
+            path: path.join(targetPath, dirent.name)
+        }));
+        res.json({ files });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/fs/mkdir', (req, res) => {
+    const { path: dirPath } = req.body;
+    const targetPath = expandHome(dirPath);
+
+    try {
+        fs.mkdirSync(targetPath, { recursive: true });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // --- Ollama Proxy ---
 
 app.get('/api/proxy/ollama/tags', async (req, res) => {
@@ -132,9 +197,19 @@ app.post('/api/proxy/ollama/chat', async (req, res) => {
             body: JSON.stringify(body)
         });
 
-        // Stream the response
-        response.body.pipe(res);
+        if (!response.ok) {
+            const errorText = await response.text();
+            return res.status(response.status).send(errorText);
+        }
+
+        // For now, assuming non-streaming or buffered streaming
+        // Converting Web Stream to Node Stream is complex without utilities
+        // Since client uses stream: false, we can just send the text
+        const data = await response.text();
+        res.setHeader('Content-Type', 'application/json');
+        res.send(data);
     } catch (error) {
+        console.error('Proxy Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

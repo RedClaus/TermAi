@@ -3,6 +3,7 @@ import styles from './AIPanel.module.css';
 import { X, Sparkles, Send, GitBranch, Folder, Paperclip, ArrowUp, Pencil, Save } from 'lucide-react';
 import { LLMManager } from '../../services/LLMManager';
 import { buildSystemPrompt } from '../../utils/promptBuilder';
+import { FileSystemService } from '../../services/FileSystemService';
 import { ModelSelector } from './ModelSelector';
 import { AVAILABLE_MODELS } from '../../data/models';
 import { SessionManager } from '../../services/SessionManager';
@@ -428,17 +429,38 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             if (e.detail.sessionId !== sessionId) return;
 
             setRunningCommandId(e.detail.commandId);
-            setRunningCommandId(e.detail.commandId);
             // Watchdog is now handled by SystemOverseer
         };
         window.addEventListener('termai-command-started' as any, handleCommandStarted as any);
 
+        const handleAutoContinue = () => {
+            if (isAutoRun) {
+                handleSend('', false); // Trigger generation with empty input (continuation)
+            }
+        };
+        window.addEventListener('termai-auto-continue', handleAutoContinue);
+
         return () => {
             window.removeEventListener('termai-command-finished' as any, handleCommandFinished as any);
             window.removeEventListener('termai-command-started' as any, handleCommandStarted as any);
+            window.removeEventListener('termai-auto-continue', handleAutoContinue);
             // if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
         };
     }, [apiKey, isAutoRun, messages, autoRunCount, runningCommandId]);
+
+    // Loop Prevention: Check if the last AI message is identical to the one before the last system message
+    // This is a heuristic to stop repetitive loops.
+    useEffect(() => {
+        if (isAutoRun && messages.length > 4) {
+            const lastAiMsg = messages[messages.length - 1];
+            const prevAiMsg = messages[messages.length - 3]; // AI -> System -> AI
+            if (lastAiMsg.role === 'ai' && prevAiMsg?.role === 'ai' && lastAiMsg.content === prevAiMsg.content) {
+                setMessages(prev => [...prev, { role: 'system', content: '⚠️ Loop Detected: You are repeating the same command/response. Auto-Run stopped.' }]);
+                setIsAutoRun(false);
+                setAgentStatus('Loop detected. Stopped.');
+            }
+        }
+    }, [messages, isAutoRun]);
 
     const handleSaveKey = () => {
         if (apiKey.trim()) {
@@ -502,10 +524,105 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
 
             // Check for code blocks to auto-run
             if (isAutoRun) {
+                // --- Tool Execution Logic ---
+                const toolRegex = /\[(READ_FILE|WRITE_FILE|LIST_FILES|MKDIR): (.*?)\]/g;
+                let toolMatch;
+                while ((toolMatch = toolRegex.exec(response)) !== null) {
+                    const [fullMatch, tool, args] = toolMatch;
+                    const path = args.trim();
+                    let output = '';
+                    let success = false;
+
+                    setAgentStatus(`Executing Tool: ${tool}...`);
+
+                    try {
+                        switch (tool) {
+                            case 'READ_FILE':
+                                const content = await FileSystemService.readFile(path);
+                                output = `[TOOL_OUTPUT]\nFile: ${path}\nContent:\n\`\`\`\n${content}\n\`\`\``;
+                                success = true;
+                                break;
+                            case 'LIST_FILES':
+                                const files = await FileSystemService.listFiles(path);
+                                output = `[TOOL_OUTPUT]\nDirectory: ${path}\nFiles:\n${files.map(f => `${f.isDirectory ? '[DIR]' : '[FILE]'} ${f.name}`).join('\n')}`;
+                                success = true;
+                                break;
+                            case 'MKDIR':
+                                await FileSystemService.createDirectory(path);
+                                output = `[TOOL_OUTPUT]\nDirectory created: ${path}`;
+                                success = true;
+                                break;
+                            case 'WRITE_FILE':
+                                // Find the code block immediately following the tool call
+                                const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/;
+                                const afterTool = response.substring(toolMatch.index + fullMatch.length);
+                                const codeMatch = codeBlockRegex.exec(afterTool);
+                                if (codeMatch) {
+                                    const fileContent = codeMatch[1];
+                                    await FileSystemService.writeFile(path, fileContent);
+                                    output = `[TOOL_OUTPUT]\nFile written: ${path}`;
+                                    success = true;
+                                } else {
+                                    output = `[TOOL_ERROR]\nNo content block found for WRITE_FILE: ${path}`;
+                                }
+                                break;
+                        }
+                    } catch (error: any) {
+                        output = `[TOOL_ERROR]\n${error.message}`;
+                    }
+
+                    // Feed result back to AI
+                    setMessages(prev => [...prev, { role: 'system', content: output }]);
+
+                    // Trigger next step if successful
+                    if (success) {
+                        // We need to trigger the AI again with the new context
+                        // This is a bit recursive, so we use a timeout to break the stack
+                        setTimeout(() => {
+                            if (isAutoRun) { // Check again in case user stopped it
+                                handleSend('', false); // Empty input triggers "continue" logic if we handle it? 
+                                // Actually handleSend expects input. We need a way to "continue".
+                                // We can just call handleSend with a hidden system prompt or just re-trigger.
+                                // Let's modify handleSend to accept a "continue" flag or just call it with "Continue"
+                                // But "Continue" might be interpreted as user input.
+                                // Better: The system message is added. We just need to call the API again.
+                                // I'll extract the API call logic or just simulate a user "continue" for now, 
+                                // but really we want the AI to see the tool output and keep going.
+                                // Let's just call handleSend with a special flag or empty string and handle it.
+                                // For now, I'll manually trigger the API call logic here to avoid recursion issues with handleSend state.
+                                // Actually, simpler: Just set a state "triggerNextTurn" and use a useEffect?
+                                // Or just call handleSend('System: Tool executed. Continue.')?
+                                // Let's try calling handleSend with a hidden prompt.
+                                // But wait, handleSend adds a USER message. We don't want that.
+                                // We added a SYSTEM message above.
+                                // We need to trigger the AI generation only.
+                                // I'll refactor handleSend slightly or just duplicate the generation logic for tools?
+                                // Duplication is risky.
+                                // Let's use a "trigger" state.
+                                window.dispatchEvent(new CustomEvent('termai-auto-continue'));
+                            }
+                        }, 1000);
+                    }
+                }
+
+                // --- Existing Command Logic ---
                 const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
                 let match;
                 while ((match = codeBlockRegex.exec(response)) !== null) {
                     const nextCommand = match[1].trim();
+                    // Skip if it looks like file content (heuristic: long, or preceded by WRITE_FILE)
+                    // This is tricky. The WRITE_FILE logic above consumes the block? No, regexes are independent.
+                    // We need to be careful not to execute file content as shell commands.
+                    // Heuristic: If previous line contained [WRITE_FILE], skip.
+                    const beforeBlock = response.substring(0, match.index).trim();
+                    if (beforeBlock.endsWith(']')) { // Likely [WRITE_FILE: ...]
+                        const lastBracket = beforeBlock.lastIndexOf('[');
+                        if (lastBracket !== -1) {
+                            const tag = beforeBlock.substring(lastBracket);
+                            if (tag.includes('WRITE_FILE')) continue; // Skip this block
+                        }
+                    }
+
                     if (nextCommand) {
                         const impact = getCommandImpact(nextCommand);
                         if (impact) {

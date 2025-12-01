@@ -106,7 +106,7 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({ command, cwd
             <div className={styles.footer}>
                 <div className={styles.footerHeader}>
                     <span className={styles.footerIcon}>⚡</span>
-                    <span className={styles.footerTitle}>Session Warped</span>
+                    <span className={styles.footerTitle}>Interactive Session</span>
                     <a href="#" className={styles.footerLink}>Learn more</a>
                 </div>
                 <div className={styles.successBlock}>

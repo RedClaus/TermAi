@@ -11,7 +11,7 @@
   --error: #da3633;
   --warning: #d29922;
 
-  /* Warp Theme */
+  /* App Theme */
   --block-bg: #161b22;
   --input-bg: #21262d;
   --chip-bg: rgba(88, 166, 255, 0.15);
@@ -36,7 +36,7 @@
   --error: #cf222e;
   --warning: #9a6700;
 
-  /* Warp Theme Light */
+  /* App Theme Light */
   --block-bg: #ffffff;
   --input-bg: #f6f8fa;
   --chip-bg: rgba(9, 105, 218, 0.1);
