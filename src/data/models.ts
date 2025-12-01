@@ -1,7 +1,7 @@
 export interface ModelSpec {
     id: string;
     name: string;
-    provider: 'openai' | 'anthropic' | 'gemini' | 'meta';
+    provider: 'openai' | 'anthropic' | 'gemini' | 'meta' | 'ollama';
     intelligence: number; // 0-100
     speed: number; // 0-100
     cost: number; // 0-100
@@ -89,5 +89,35 @@ export const AVAILABLE_MODELS: ModelSpec[] = [
         cost: 10,
         contextWindow: '1M',
         description: 'Extremely fast and cost-effective.'
+    },
+    {
+        id: 'ollama-llama3',
+        name: 'Llama 3 (Ollama)',
+        provider: 'ollama',
+        intelligence: 88,
+        speed: 95,
+        cost: 0,
+        contextWindow: '8k',
+        description: 'Local Llama 3 model via Ollama.'
+    },
+    {
+        id: 'ollama-mistral',
+        name: 'Mistral (Ollama)',
+        provider: 'ollama',
+        intelligence: 85,
+        speed: 98,
+        cost: 0,
+        contextWindow: '8k',
+        description: 'Local Mistral model via Ollama.'
+    },
+    {
+        id: 'ollama-codellama',
+        name: 'CodeLlama (Ollama)',
+        provider: 'ollama',
+        intelligence: 80,
+        speed: 90,
+        cost: 0,
+        contextWindow: '16k',
+        description: 'Local CodeLlama model via Ollama.'
     }
 ];

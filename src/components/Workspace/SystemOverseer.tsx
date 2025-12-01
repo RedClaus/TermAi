@@ -18,6 +18,11 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
     const runningCommandRef = useRef<{ id: string, startTime: number } | null>(null);
     const isAiThinkingRef = useRef<boolean>(false);
     const aiStartTimeRef = useRef<number>(0);
+    const stateRef = useRef<SystemState>('healthy');
+
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
 
     useEffect(() => {
         const updateActivity = () => {
@@ -37,7 +42,7 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
             if (e.detail.sessionId !== sessionId) return;
             updateActivity();
             // If we get output, we are healthy even if running long
-            if (state === 'stalled') {
+            if (stateRef.current === 'stalled') {
                 setState('busy');
                 setStatusMessage('Processing output...');
             }
@@ -83,12 +88,14 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
 
                 // Check Command Stall (Running > 30s AND No Output > 30s)
                 if (runDuration > 30000 && timeSinceActivity > 30000) {
-                    setState('stalled');
-                    setStatusMessage('Stalled! Auto-Fixing...');
+                    if (stateRef.current !== 'stalled') {
+                        setState('stalled');
+                        setStatusMessage('Stalled! Auto-Fixing...');
+                    }
 
                     // Auto-Intervention after 5s of stall
                     if (runDuration > 35000) {
-                        handleIntervention();
+                        handleIntervention(true);
                     }
                 }
             }
@@ -97,8 +104,10 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
             if (isAiThinkingRef.current) {
                 const thinkDuration = now - aiStartTimeRef.current;
                 if (thinkDuration > 45000) {
-                    setState('stalled');
-                    setStatusMessage('AI Stalled?');
+                    if (stateRef.current !== 'stalled') {
+                        setState('stalled');
+                        setStatusMessage('AI Stalled?');
+                    }
                 }
             }
         }, 1000);
@@ -112,8 +121,11 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
         };
     }, [sessionId]);
 
-    const handleIntervention = () => {
-        if (state === 'stalled') {
+    const handleIntervention = (force: boolean | React.MouseEvent = false) => {
+        const isForce = typeof force === 'boolean' ? force : false;
+
+        // Use stateRef.current to check current state, or force flag
+        if (stateRef.current === 'stalled' || isForce) {
             if (runningCommandRef.current) {
                 // Cancel command
                 window.dispatchEvent(new CustomEvent('termai-cancel-command', {
@@ -124,10 +136,14 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({ sessionId }) => 
             if (isAiThinkingRef.current) {
                 // Reset AI (simulated by just clearing state for now, ideally we'd abort the fetch)
                 isAiThinkingRef.current = false;
+                setState('healthy');
                 setStatusMessage('Intervention: Reset AI');
             }
-            setState('healthy');
-            setTimeout(() => setStatusMessage('System Healthy'), 2000);
+            // Only reset to healthy if we actually did something or if forced
+            if (stateRef.current === 'stalled') {
+                setState('healthy');
+                setTimeout(() => setStatusMessage('System Healthy'), 2000);
+            }
         }
     };
 

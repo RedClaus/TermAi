@@ -86,6 +86,16 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) =
                         ? { ...b, output: 'Command cancelled by user/AI.', exitCode: 130, isLoading: false }
                         : b
                 ));
+
+                // Notify AI that command is finished (cancelled) so it can recover
+                window.dispatchEvent(new CustomEvent('termai-command-finished', {
+                    detail: {
+                        command,
+                        output: 'Command cancelled by user/AI.',
+                        exitCode: 130,
+                        sessionId
+                    }
+                }));
             }
         };
         window.addEventListener('termai-cancel-command' as any, handleCancel as any);

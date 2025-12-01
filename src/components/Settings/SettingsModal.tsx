@@ -12,6 +12,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     const [geminiKey, setGeminiKey] = useState('');
     const [openAIKey, setOpenAIKey] = useState('');
     const [anthropicKey, setAnthropicKey] = useState('');
+    const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
 
     useEffect(() => {
         if (isOpen) {
@@ -20,6 +21,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             setGeminiKey(localStorage.getItem('termai_gemini_key') || '');
             setOpenAIKey(localStorage.getItem('termai_openai_key') || '');
             setAnthropicKey(localStorage.getItem('termai_anthropic_key') || '');
+            setOllamaEndpoint(localStorage.getItem('termai_ollama_key') || 'http://localhost:11434');
         }
     }, [isOpen]);
 
@@ -28,9 +30,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         if (geminiKey) localStorage.setItem('termai_gemini_key', geminiKey);
         if (openAIKey) localStorage.setItem('termai_openai_key', openAIKey);
         if (anthropicKey) localStorage.setItem('termai_anthropic_key', anthropicKey);
+        if (ollamaEndpoint) localStorage.setItem('termai_ollama_key', ollamaEndpoint);
 
         // Notify other components that settings have changed
         window.dispatchEvent(new Event('termai-settings-changed'));
+
+        if (provider === 'ollama') {
+            window.dispatchEvent(new CustomEvent('termai-fetch-models', { detail: { endpoint: ollamaEndpoint } }));
+        }
 
         onClose();
     };
@@ -60,6 +67,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 <option value="gemini">Google Gemini</option>
                                 <option value="openai">OpenAI (GPT-4)</option>
                                 <option value="anthropic">Anthropic (Opus 4.5)</option>
+                                <option value="ollama">Ollama (Local)</option>
                             </select>
                         </div>
                     </div>
@@ -103,6 +111,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                     onChange={(e) => setAnthropicKey(e.target.value)}
                                     placeholder="Enter your Anthropic API Key"
                                 />
+                            </div>
+                        )}
+
+                        {provider === 'ollama' && (
+                            <div className={styles.inputGroup}>
+                                <label className={styles.label}>Ollama Endpoint URL</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                        type="text"
+                                        className={styles.input}
+                                        value={ollamaEndpoint}
+                                        onChange={(e) => setOllamaEndpoint(e.target.value)}
+                                        placeholder="http://localhost:11434"
+                                    />
+                                </div>
+                                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                    Default is http://localhost:11434. Click Save to fetch models.
+                                </p>
                             </div>
                         )}
                     </div>

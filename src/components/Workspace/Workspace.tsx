@@ -32,6 +32,85 @@ export const Workspace: React.FC<WorkspaceProps> = ({ sessionId }) => {
         window.dispatchEvent(new CustomEvent('termai-theme-changed', { detail: { theme: newTheme } }));
     };
 
+    const [aiSize, setAiSize] = useState(350);
+    const [isDragging, setIsDragging] = useState(false);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        setIsDragging(true);
+        e.preventDefault();
+    };
+
+    React.useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging || !containerRef.current) return;
+
+            const containerRect = containerRef.current.getBoundingClientRect();
+            let newSize = aiSize;
+
+            if (layout === 'side-right') {
+                newSize = containerRect.right - e.clientX;
+            } else if (layout === 'side-left') {
+                newSize = e.clientX - containerRect.left;
+            } else if (layout === 'bottom') {
+                newSize = containerRect.bottom - e.clientY;
+            } else if (layout === 'top') {
+                newSize = e.clientY - containerRect.top;
+            }
+
+            // Constraints
+            if (layout.includes('side')) {
+                newSize = Math.max(250, Math.min(newSize, containerRect.width - 200));
+            } else {
+                newSize = Math.max(150, Math.min(newSize, containerRect.height - 100));
+            }
+
+            setAiSize(newSize);
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, layout, aiSize]);
+
+    // Reset size when switching orientation
+    React.useEffect(() => {
+        if (layout.includes('side')) {
+            setAiSize(350);
+        } else {
+            setAiSize(300);
+        }
+    }, [layout]);
+
+    const getResizerStyle = () => {
+        const baseStyle: React.CSSProperties = {
+            background: isDragging ? 'var(--accent-primary)' : 'transparent',
+            zIndex: 10,
+            transition: 'background 0.2s',
+        };
+
+        if (layout === 'side-right') {
+            return { ...baseStyle, width: '4px', cursor: 'col-resize', position: 'absolute', left: '-2px', top: 0, bottom: 0 };
+        } else if (layout === 'side-left') {
+            return { ...baseStyle, width: '4px', cursor: 'col-resize', position: 'absolute', right: '-2px', top: 0, bottom: 0 };
+        } else if (layout === 'bottom') {
+            return { ...baseStyle, height: '4px', cursor: 'row-resize', position: 'absolute', top: '-2px', left: 0, right: 0 };
+        } else if (layout === 'top') {
+            return { ...baseStyle, height: '4px', cursor: 'row-resize', position: 'absolute', bottom: '-2px', left: 0, right: 0 };
+        }
+        return baseStyle;
+    };
+
     return (
         <div className={styles.workspace}>
             <div className={styles.toolbar}>
@@ -84,12 +163,23 @@ export const Workspace: React.FC<WorkspaceProps> = ({ sessionId }) => {
                 </div>
             </div>
 
-            <div className={clsx(styles.container, styles[layout], !isAIOpen && styles.aiHidden)}>
+            <div className={clsx(styles.container, styles[layout], !isAIOpen && styles.aiHidden)} ref={containerRef}>
                 <div className={styles.terminalArea}>
                     <TerminalSession sessionId={sessionId} />
                 </div>
                 {isAIOpen && (
-                    <div className={styles.aiArea}>
+                    <div
+                        className={styles.aiArea}
+                        style={{
+                            width: layout.includes('side') ? `${aiSize}px` : '100%',
+                            height: !layout.includes('side') ? `${aiSize}px` : '100%',
+                            position: 'relative'
+                        }}
+                    >
+                        <div
+                            onMouseDown={handleMouseDown}
+                            style={getResizerStyle() as React.CSSProperties}
+                        />
                         <AIPanel
                             isOpen={isAIOpen}
                             onClose={() => setIsAIOpen(false)}

@@ -23,6 +23,115 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
     const [isAutoRun, setIsAutoRun] = useState(false);
     const [autoRunCount, setAutoRunCount] = useState(0);
     const [agentStatus, setAgentStatus] = useState<string | null>(null);
+    const [showSafetyConfirm, setShowSafetyConfirm] = useState(false);
+    const [pendingSafetyCommand, setPendingSafetyCommand] = useState<{ command: string, sessionId?: string, impact?: string } | null>(null);
+
+    const getCommandImpact = (cmd: string): string | null => {
+        if (/(?:^|\s|;|&)(rm\s+)(?:-[a-zA-Z]*r[a-zA-Z]*\s+)?\//.test(cmd)) return "CRITICAL: Recursively deletes from root. System destruction likely.";
+        if (/(?:^|\s|;|&)(rm\s+)(?:-[a-zA-Z]*r[a-zA-Z]*\s+)?~/.test(cmd)) return "CRITICAL: Recursively deletes home directory. Data loss likely.";
+        if (/(?:^|\s|;|&)(rm\s+)(?:-[a-zA-Z]*r[a-zA-Z]*\s+)?/.test(cmd)) return "Deletes files/directories recursively. Permanent data loss.";
+        if (/(?:^|\s|;|&)(rm\s+)/.test(cmd)) return "Deletes files permanently.";
+        if (/(?:^|\s|;|&)(mkfs)/.test(cmd)) return "Formats a filesystem. All data on target will be lost.";
+        if (/(?:^|\s|;|&)(dd)/.test(cmd)) return "Low-level data copy. Can overwrite disks/partitions.";
+        if (/(?:^|\s|;|&)(sudo)/.test(cmd)) return "Runs with superuser privileges. Can modify system files.";
+        if (/(?:^|\s|;|&)(:(){ :|:& };:)/.test(cmd)) return "Fork bomb. Will crash the system.";
+        return null;
+    };
+
+    const handleSafetyConfirm = (confirmed: boolean) => {
+        if (confirmed && pendingSafetyCommand) {
+            window.dispatchEvent(new CustomEvent('termai-run-command', { detail: pendingSafetyCommand }));
+            const cmd = pendingSafetyCommand.command;
+            const isCoding = cmd.startsWith('echo') || cmd.startsWith('cat') || cmd.startsWith('printf') || cmd.includes('>');
+            setAgentStatus(isCoding ? `Coding: ${cmd}` : `Terminal: ${cmd}`);
+            setAutoRunCount(prev => prev + 1);
+        } else {
+            setMessages(prev => [...prev, { role: 'system', content: '⚠️ Command cancelled by user safety check.' }]);
+            setAgentStatus('Command cancelled.');
+        }
+        setShowSafetyConfirm(false);
+        setPendingSafetyCommand(null);
+    };
+
+    // ... UI ...
+    {
+        showSafetyConfirm && pendingSafetyCommand && (
+            <div style={{
+                position: 'absolute',
+                bottom: '80px',
+                left: '16px',
+                right: '16px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--error)',
+                borderRadius: '8px',
+                padding: '16px',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 1000
+            }}>
+                <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '13px', color: 'var(--error)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>⚠️</span> Dangerous Command Detected
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    The AI wants to run a potentially destructive command:
+                </div>
+                <div style={{
+                    background: 'var(--bg-tertiary)',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    marginBottom: '12px',
+                    overflowX: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    color: 'var(--error)'
+                }}>
+                    {pendingSafetyCommand.command}
+                </div>
+                <div style={{
+                    fontSize: '12px',
+                    color: 'var(--text-primary)',
+                    marginBottom: '16px',
+                    padding: '8px',
+                    background: 'rgba(218, 54, 51, 0.1)',
+                    borderRadius: '4px',
+                    borderLeft: '3px solid var(--error)'
+                }}>
+                    <strong>Impact:</strong> {pendingSafetyCommand.impact}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={() => handleSafetyConfirm(true)}
+                        style={{
+                            flex: 1,
+                            padding: '8px',
+                            background: 'var(--error)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                        }}
+                    >
+                        Allow & Run
+                    </button>
+                    <button
+                        onClick={() => handleSafetyConfirm(false)}
+                        style={{
+                            flex: 1,
+                            padding: '8px',
+                            background: 'var(--bg-tertiary)',
+                            color: 'var(--text-primary)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        )
+    }
     const [runningCommandId, setRunningCommandId] = useState<string | null>(null);
     const [selectedModelId, setSelectedModelId] = useState(AVAILABLE_MODELS[0].id);
     // const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null); // Moved to SystemOverseer
@@ -36,6 +145,49 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
     const [isEditingName, setIsEditingName] = useState(false);
     const [showComplexConfirm, setShowComplexConfirm] = useState(false);
     const [pendingComplexMessage, setPendingComplexMessage] = useState('');
+    const [models, setModels] = useState(AVAILABLE_MODELS);
+
+    const fetchOllamaModels = async (endpoint: string) => {
+        try {
+            const response = await fetch(`${endpoint}/api/tags`);
+            if (!response.ok) throw new Error('Failed to fetch models');
+            const data = await response.json();
+
+            const ollamaModels = data.models.map((m: any) => ({
+                id: `ollama-${m.name}`,
+                name: `${m.name} (Ollama)`,
+                provider: 'ollama',
+                intelligence: 80, // Default estimate
+                speed: 90,
+                cost: 0,
+                contextWindow: 'Unknown',
+                description: `Local model: ${m.name}`
+            }));
+
+            // Merge with existing models, replacing old Ollama ones if needed
+            setModels(prev => {
+                const nonOllama = prev.filter(p => p.provider !== 'ollama');
+                return [...nonOllama, ...ollamaModels];
+            });
+
+            // Auto-save endpoint and switch to chat view
+            localStorage.setItem('termai_ollama_key', endpoint);
+            setApiKey(endpoint);
+            setHasKey(true);
+            setAgentStatus(`Fetched ${ollamaModels.length} local models!`);
+
+            // If no messages, add a welcome message
+            if (messages.length === 1 && messages[0].role === 'ai' && messages[0].content.includes('Please enter your')) {
+                setMessages([{ role: 'ai', content: `Connected to Ollama at ${endpoint}. Found ${ollamaModels.length} models. How can I help?` }]);
+            }
+
+            setTimeout(() => setAgentStatus(null), 3000);
+        } catch (error) {
+            console.error('Error fetching Ollama models:', error);
+            setAgentStatus('Error fetching models. Check endpoint.');
+            setTimeout(() => setAgentStatus(null), 3000);
+        }
+    };
 
     useEffect(() => {
         if (sessionId) {
@@ -98,9 +250,15 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
         };
         window.addEventListener('termai-cwd-changed' as any, handleCwdChange as any);
 
+        const handleFetchModels = (e: CustomEvent<{ endpoint: string }>) => {
+            fetchOllamaModels(e.detail.endpoint);
+        };
+        window.addEventListener('termai-fetch-models' as any, handleFetchModels as any);
+
         return () => {
             window.removeEventListener('termai-settings-changed', handleSettingsChange);
             window.removeEventListener('termai-cwd-changed' as any, handleCwdChange as any);
+            window.removeEventListener('termai-fetch-models' as any, handleFetchModels as any);
         };
     }, [isOpen]);
 
@@ -176,23 +334,27 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                     let match;
                     let foundCommand = false;
 
+
+                    // ... inside useEffect for auto-run ...
                     while ((match = codeBlockRegex.exec(response)) !== null) {
                         const nextCommand = match[1].trim();
                         if (nextCommand) {
-                            foundCommand = true;
+                            const impact = getCommandImpact(nextCommand);
+                            if (impact) {
+                                setPendingSafetyCommand({ command: nextCommand, sessionId, impact });
+                                setShowSafetyConfirm(true);
+                                setAgentStatus('Waiting for safety confirmation...');
+                                break;
+                            }
                             setAutoRunCount(prev => prev + 1);
+                            window.dispatchEvent(new CustomEvent('termai-run-command', { detail: { command: nextCommand, sessionId } }));
                             setTimeout(() => {
                                 const isCoding = nextCommand.startsWith('echo') || nextCommand.startsWith('cat') || nextCommand.startsWith('printf') || nextCommand.includes('>');
                                 setAgentStatus(isCoding ? `Coding: ${nextCommand}` : `Terminal: ${nextCommand}`);
-                                // We can't easily get the ID back unless TerminalSession broadcasts it.
-                                // Actually, we just dispatch the command string. TerminalSession generates the ID.
-                                // We can't easily get the ID back unless TerminalSession broadcasts it.
-                                // Let's assume for now we just broadcast "CANCEL" and TerminalSession cancels the *latest* one?
-                                // Or better: TerminalSession broadcasts "termai-command-started" with ID.
-                                window.dispatchEvent(new CustomEvent('termai-run-command', { detail: { command: nextCommand, sessionId } }));
-                            }, 1500); // Delay for UX
+                            }, 1500);
                         }
                     }
+
 
                     if (!foundCommand && response.toLowerCase().includes('task complete')) {
                         // Keep Auto-Run on, just reset count for next task
@@ -315,12 +477,19 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                 const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)\n```/g;
                 let match;
                 while ((match = codeBlockRegex.exec(response)) !== null) {
-                    const command = match[1].trim();
-                    if (command) {
+                    const nextCommand = match[1].trim();
+                    if (nextCommand) {
+                        const impact = getCommandImpact(nextCommand);
+                        if (impact) {
+                            setPendingSafetyCommand({ command: nextCommand, sessionId, impact });
+                            setShowSafetyConfirm(true);
+                            setAgentStatus('Waiting for safety confirmation...');
+                            break;
+                        }
                         setAutoRunCount(prev => prev + 1);
-                        window.dispatchEvent(new CustomEvent('termai-run-command', { detail: { command, sessionId } }));
-                        const isCoding = command.startsWith('echo') || command.startsWith('cat') || command.startsWith('printf') || command.includes('>');
-                        setAgentStatus(isCoding ? `Coding: ${command}` : `Terminal: ${command}`);
+                        window.dispatchEvent(new CustomEvent('termai-run-command', { detail: { command: nextCommand, sessionId } }));
+                        const isCoding = nextCommand.startsWith('echo') || nextCommand.startsWith('cat') || nextCommand.startsWith('printf') || nextCommand.includes('>');
+                        setAgentStatus(isCoding ? `Coding: ${nextCommand}` : `Terminal: ${nextCommand}`);
                     }
                 }
                 if (response.includes('[NEW_TAB]')) {
@@ -328,8 +497,21 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                 }
             }
         }
-        catch (error) {
-            setMessages(prev => [...prev, { role: 'ai', content: 'Sorry, something went wrong. Please check your API key in Settings.' }]);
+        catch (error: any) {
+            console.error('LLM Error:', error);
+            let errorMsg = 'Sorry, something went wrong.';
+
+            if (error.message) {
+                errorMsg += ` Error: ${error.message}`;
+            }
+
+            if (localStorage.getItem('termai_provider') !== 'ollama') {
+                errorMsg += ' Please check your API key in Settings.';
+            } else {
+                errorMsg += ' Please check your Ollama endpoint and ensure the model is installed.';
+            }
+
+            setMessages(prev => [...prev, { role: 'ai', content: errorMsg }]);
         } finally {
             setIsLoading(false);
         }
@@ -409,20 +591,37 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
             <div className={styles.content}>
                 {!hasKey ? (
                     <div className={styles.message + ' ' + styles.aiMessage}>
-                        <p style={{ marginBottom: '10px' }}>Please enter your {(localStorage.getItem('termai_provider') || 'gemini').charAt(0).toUpperCase() + (localStorage.getItem('termai_provider') || 'gemini').slice(1)} API Key:</p>
+                        <p style={{ marginBottom: '10px' }}>
+                            {localStorage.getItem('termai_provider') === 'ollama'
+                                ? 'Enter Ollama Endpoint URL:'
+                                : `Please enter your ${(localStorage.getItem('termai_provider') || 'gemini').charAt(0).toUpperCase() + (localStorage.getItem('termai_provider') || 'gemini').slice(1)} API Key:`}
+                        </p>
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <input
-                                type="password"
+                                type={localStorage.getItem('termai_provider') === 'ollama' ? 'text' : 'password'}
                                 className={styles.input}
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
-                                placeholder="API Key"
+                                placeholder={localStorage.getItem('termai_provider') === 'ollama' ? 'http://localhost:11434' : 'API Key'}
                             />
+                            {localStorage.getItem('termai_provider') === 'ollama' && (
+                                <button
+                                    onClick={() => fetchOllamaModels(apiKey || 'http://localhost:11434')}
+                                    className={styles.actionBtn}
+                                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0 12px', cursor: 'pointer' }}
+                                >
+                                    Fetch Models
+                                </button>
+                            )}
                             <button onClick={handleSaveKey} className={styles.actionBtn} style={{ background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', padding: '0 12px', cursor: 'pointer' }}>
                                 Save
                             </button>
                         </div>
-                        <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Key is stored locally in your browser.</p>
+                        <p style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>
+                            {localStorage.getItem('termai_provider') === 'ollama'
+                                ? 'Default: http://localhost:11434. No key required.'
+                                : 'Key is stored locally in your browser.'}
+                        </p>
                     </div>
                 ) : (
                     messages.map((msg, idx) => (
@@ -506,8 +705,31 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                                 <Paperclip size={16} />
                             </button>
                             <ModelSelector
+                                models={models}
                                 selectedModelId={selectedModelId}
-                                onSelect={(model) => setSelectedModelId(model.id)}
+                                onSelect={(model) => {
+                                    setSelectedModelId(model.id);
+                                    // Update provider based on model
+                                    const newProvider = model.provider;
+                                    localStorage.setItem('termai_provider', newProvider);
+
+                                    // Load key for new provider
+                                    const storedKey = localStorage.getItem(`termai_${newProvider}_key`);
+                                    if (newProvider === 'ollama') {
+                                        setHasKey(true); // Ollama doesn't strictly need a key
+                                        setApiKey(storedKey || 'http://localhost:11434');
+                                    } else if (storedKey) {
+                                        setApiKey(storedKey);
+                                        setHasKey(true);
+                                    } else {
+                                        setApiKey('');
+                                        setHasKey(false);
+                                        setMessages(prev => [...prev, { role: 'system', content: `Switched to ${model.name}. Please enter your ${newProvider} API key.` }]);
+                                    }
+
+                                    // Dispatch event to notify other components if needed
+                                    window.dispatchEvent(new Event('termai-settings-changed'));
+                                }}
                             />
                             <textarea
                                 className={styles.input}
@@ -574,12 +796,11 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                                 background: 'var(--accent-primary)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '12px'
+                                borderRadius: '6px',
+                                cursor: 'pointer'
                             }}
                         >
-                            New Conversation
+                            Start New
                         </button>
                         <button
                             onClick={() => handleSend(pendingComplexMessage, false)}
@@ -588,13 +809,77 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, sessionId, is
                                 padding: '8px',
                                 background: 'var(--bg-tertiary)',
                                 color: 'var(--text-primary)',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '12px'
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
                             }}
                         >
                             Continue
+                        </button>
+                    </div>
+                </div>
+            )}
+            {showSafetyConfirm && pendingSafetyCommand && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '80px',
+                    left: '16px',
+                    right: '16px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--error-color)',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    boxShadow: 'var(--shadow-lg)',
+                    zIndex: 1000
+                }}>
+                    <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '13px', color: 'var(--error-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>⚠️</span> Dangerous Command Detected
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                        The AI wants to run a potentially destructive command:
+                    </div>
+                    <div style={{
+                        background: 'var(--bg-tertiary)',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        fontFamily: 'monospace',
+                        fontSize: '11px',
+                        marginBottom: '16px',
+                        overflowX: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        color: 'var(--error-color)'
+                    }}>
+                        {pendingSafetyCommand.command}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={() => handleSafetyConfirm(true)}
+                            style={{
+                                flex: 1,
+                                padding: '8px',
+                                background: 'var(--error-color)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                            }}
+                        >
+                            Allow & Run
+                        </button>
+                        <button
+                            onClick={() => handleSafetyConfirm(false)}
+                            style={{
+                                flex: 1,
+                                padding: '8px',
+                                background: 'var(--bg-tertiary)',
+                                color: 'var(--text-primary)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Cancel
                         </button>
                     </div>
                 </div>

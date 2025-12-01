@@ -114,6 +114,58 @@ export class AnthropicProvider implements LLMProvider {
     }
 }
 
+export class OllamaProvider implements LLMProvider {
+    private baseUrl: string;
+    private modelId: string;
+
+    constructor(baseUrl: string = 'http://localhost:11434', modelId: string = 'llama3') {
+        this.baseUrl = baseUrl;
+
+        // Handle dynamic model IDs from fetchOllamaModels
+        if (modelId.startsWith('ollama-')) {
+            this.modelId = modelId.replace('ollama-', '');
+        } else {
+            // Map custom IDs to likely Ollama model names (fallback for hardcoded ones)
+            const modelMap: Record<string, string> = {
+                'ollama-llama3': 'llama3',
+                'ollama-mistral': 'mistral',
+                'ollama-codellama': 'codellama',
+                'auto': 'llama3'
+            };
+            this.modelId = modelMap[modelId] || 'llama3';
+        }
+    }
+
+    async chat(message: string, context?: string): Promise<string> {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: this.modelId,
+                    messages: [
+                        { role: 'system', content: context || 'You are a helpful assistant.' },
+                        { role: 'user', content: message }
+                    ],
+                    stream: false
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Ollama API error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.message?.content || 'No response from Ollama.';
+        } catch (error) {
+            console.error('Error calling Ollama API:', error);
+            throw error;
+        }
+    }
+}
+
 export class LLMManager {
     static getProvider(type: string, apiKey: string, modelId?: string): LLMProvider {
         switch (type) {
@@ -123,6 +175,9 @@ export class LLMManager {
                 return new OpenAIProvider(apiKey, modelId);
             case 'anthropic':
                 return new AnthropicProvider(apiKey, modelId);
+            case 'ollama':
+                // For Ollama, apiKey might be treated as base URL if provided, or ignored
+                return new OllamaProvider(apiKey || 'http://localhost:11434', modelId);
             default:
                 throw new Error(`Unknown provider: ${type}`);
         }

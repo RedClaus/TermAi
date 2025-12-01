@@ -7,14 +7,16 @@ import type { ModelSpec } from '../../data/models';
 interface ModelSelectorProps {
     selectedModelId: string;
     onSelect: (model: ModelSpec) => void;
+    models?: ModelSpec[];
 }
 
-export const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModelId, onSelect }) => {
+export const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModelId, onSelect, models = AVAILABLE_MODELS }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [hoveredModel, setHoveredModel] = useState<ModelSpec | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    const selectedModel = AVAILABLE_MODELS.find(m => m.id === selectedModelId) || AVAILABLE_MODELS[0];
+    const activeModels = models || AVAILABLE_MODELS;
+    const selectedModel = activeModels.find(m => m.id === selectedModelId) || activeModels[0];
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -40,7 +42,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModelId, o
 
             {isOpen && (
                 <div className={styles.dropdown}>
-                    {AVAILABLE_MODELS.map(model => (
+                    {activeModels.map(model => (
                         <div
                             key={model.id}
                             className={`${styles.option} ${model.id === selectedModelId ? styles.selected : ''}`}

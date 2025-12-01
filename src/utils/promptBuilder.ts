@@ -30,6 +30,10 @@ Operational Rules:
 5. To open a new terminal tab, output [NEW_TAB].
 6. If a command is taking too long, you can output [CANCEL] to stop it.
 7. Output ONLY ONE command at a time unless absolutely necessary.
+8. AVOID heavy commands on root/home directories like \`du -sh ~/*\` or \`find / ...\`. These will hang. Use specific paths or depth limits (e.g., \`du -sh ./*\` or \`find . -maxdepth 2 ...\`).
+9. SYNTAX CHECK: Ensure \`head\` has arguments (e.g., \`head -n 10\`, not \`head -n\`).
+10. SAFETY FIRST: If you suggest a dangerous command (rm, sudo, mkfs, etc.), you MUST provide a warning explaining the impact BEFORE the command block.
+
 `;
 
     if (isAutoRun) {
@@ -41,7 +45,8 @@ AUTO-RUN MODE ACTIVE:
 4. If the task is complete, output "Task Complete".
 5. If you encounter an error, do NOT repeat the same command.
 6. BACKTRACKING PROTOCOL: If a command fails (Exit Code != 0), explicitly state: "Step [X] failed. Backtracking to Step [Y]." Then propose an alternative approach.
-7. If stuck, output [WAIT] or ask the user for clarification.
+7. TIMEOUT HANDLING: If a command was cancelled or timed out, assume it was too heavy. Try a lighter alternative (e.g., \`ls\` instead of \`find\`, or check a specific subfolder).
+8. If stuck, output [WAIT] or ask the user for clarification.
 `;
     } else {
         prompt += `
@@ -49,6 +54,8 @@ INTERACTIVE MODE:
 1. Guide the user through the task.
 2. Explain complex commands before suggesting them.
 3. If an error occurs, analyze the "System Output" and suggest a fix.
+4. If a command hangs, suggest a faster alternative.
+5. WARN the user about any destructive actions.
 `;
     }
 
