@@ -1,6 +1,6 @@
 # TermAI 🤖🚀
 
-**TermAI** is a next-generation, AI-powered terminal assistant designed to revolutionize how you interact with your shell. It bridges the gap between natural language and complex command-line operations, wrapping a powerful terminal emulator in a modern, "Warp-like" interface.
+**TermAI** is a next-generation, AI-powered terminal assistant designed to revolutionize how you interact with your shell. It bridges the gap between natural language and complex command-line operations, wrapping a powerful terminal emulator in a modern, streamlined interface.
 
 ![TermAI Screenshot](https://via.placeholder.com/800x450?text=TermAI+Interface+Preview)
 *(Note: Replace with actual screenshot)*
@@ -10,7 +10,7 @@
 *   **🧠 AI-Powered Command Generation**: Just describe what you want to do (e.g., "Find all large files in this directory"), and TermAI generates the correct shell commands for you.
 *   **🔄 Multi-Model Support**: Choose your brain! Seamlessly switch between **Google Gemini**, **OpenAI GPT-4**, and **Anthropic Claude 3** to power your assistant.
 *   **🛡️ Smart Error Recovery**: If a command fails, TermAI detects the error code, analyzes the output, and automatically suggests a fix or backtracks to a safe state.
-*   **🎨 Modern "Warp-Like" UI**:
+*   **🎨 Modern UI**:
     *   **Block-Based Output**: Commands and their outputs are grouped into distinct, card-like blocks for better readability.
     *   **Floating Input Bar**: A sleek, context-aware input area that stays out of your way.
     *   **Light/Dark Mode**: Switch between a hacker-friendly dark theme and a crisp light theme.
