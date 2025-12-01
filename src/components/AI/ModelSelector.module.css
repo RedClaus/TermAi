@@ -1,0 +1,133 @@
+.container {
+    position: relative;
+}
+
+.trigger {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.trigger:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    width: 240px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    padding: 4px;
+}
+
+.option {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.option:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.option.selected {
+    background-color: var(--accent-primary);
+    color: white;
+}
+
+/* Specs Card */
+.specsCard {
+    position: absolute;
+    left: 100%;
+    bottom: 0;
+    margin-left: 8px;
+    width: 280px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1001;
+}
+
+.specsHeader {
+    margin-bottom: 12px;
+}
+
+.specsTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.specsDesc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.specRow {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.specLabel {
+    width: 80px;
+    color: var(--text-secondary);
+}
+
+.specBarContainer {
+    flex: 1;
+    height: 6px;
+    background-color: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.specBar {
+    height: 100%;
+    background-color: var(--text-secondary);
+    border-radius: 3px;
+}
+
+.specRow:nth-child(1) .specBar {
+    background-color: var(--accent-primary);
+}
+
+/* Intelligence */
+.specRow:nth-child(2) .specBar {
+    background-color: var(--success);
+}
+
+/* Speed */
+.specRow:nth-child(3) .specBar {
+    background-color: var(--warning);
+}
+
+/* Cost */

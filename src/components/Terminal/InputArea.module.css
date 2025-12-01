@@ -1,0 +1,72 @@
+.container {
+    padding: 16px;
+    background-color: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+    position: sticky;
+    bottom: 0;
+}
+
+.inputWrapper {
+    display: flex;
+    align-items: flex-start;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inputWrapper:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+
+.prompt {
+    color: var(--success);
+    margin-right: 12px;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-weight: bold;
+    user-select: none;
+}
+
+.input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    outline: none;
+    resize: none;
+    min-height: 20px;
+    line-height: 1.5;
+}
+
+.input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+}
+
+.actionBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.actionBtn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}

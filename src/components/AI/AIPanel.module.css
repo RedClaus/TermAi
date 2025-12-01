@@ -1,0 +1,130 @@
+.panel {
+    width: 350px;
+    background-color: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: width 0.3s ease;
+    overflow: hidden;
+}
+
+.panel.closed {
+    width: 0;
+    border-left: none;
+}
+
+.header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.embedded {
+    position: static;
+    width: 100%;
+    height: 100%;
+    border-left: none;
+    box-shadow: none;
+    z-index: 1;
+}
+
+.message {
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.userMessage {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    align-self: flex-end;
+    max-width: 85%;
+}
+
+.aiMessage {
+    background-color: rgba(38, 166, 154, 0.1);
+    color: var(--text-primary);
+    align-self: flex-start;
+    max-width: 90%;
+    border: 1px solid rgba(38, 166, 154, 0.2);
+}
+
+.systemMessage {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-left: 2px solid var(--warning);
+    font-family: var(--font-mono);
+}
+
+.inputWrapper {
+    padding: 16px;
+    background: linear-gradient(to top, var(--bg-secondary) 80%, transparent);
+}
+
+.inputContainer {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: var(--shadow-md);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inputContainer:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-lg);
+}
+
+.input {
+    width: 100%;
+    background-color: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    min-height: 24px;
+}
+
+.contextChips {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--chip-bg);
+    color: var(--accent-primary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+}
+
+.chipIcon {
+    opacity: 0.7;
+}
