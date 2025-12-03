@@ -9,7 +9,7 @@
  * - Settings change events
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { LLMManager } from "../services/LLMManager";
 import { config } from "../config";
 import { AVAILABLE_MODELS, isSmallModel, getModelSize } from "../data/models";
@@ -100,6 +100,10 @@ export function useSettingsLoader({
   const [currentCwd, setCurrentCwd] = useState(initialCwd);
   const [isLiteMode, setIsLiteMode] = useState(false);
   const [liteModeNotified, setLiteModeNotified] = useState(false);
+  
+  // Track if initial load has happened to prevent infinite loops
+  const hasLoadedRef = useRef(false);
+  const loadSettingsRef = useRef<(() => Promise<void>) | null>(null);
 
   // =============================================
   // Ollama Model Fetching
@@ -246,19 +250,33 @@ export function useSettingsLoader({
   // Effects
   // =============================================
 
+  // Store loadSettings in ref for stable reference
+  loadSettingsRef.current = loadSettings;
+
   // Load settings on mount (respecting isActive for inactive tabs)
+  // Use hasLoadedRef to prevent re-running when loadSettings changes
   useEffect(() => {
-    if (isActive) {
-      loadSettings();
+    if (isActive && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadSettingsRef.current?.();
     }
-  }, [isActive, loadSettings]);
+  }, [isActive]);
+
+  // Reset loaded flag when isActive becomes false (tab switched away)
+  useEffect(() => {
+    if (!isActive) {
+      hasLoadedRef.current = false;
+    }
+  }, [isActive]);
 
   // =============================================
   // Event Handlers
   // =============================================
 
-  // Reload settings when they change
-  useTermAiEvent("termai-settings-changed", loadSettings, [loadSettings]);
+  // Reload settings when they change (use ref for stable callback)
+  useTermAiEvent("termai-settings-changed", () => {
+    loadSettingsRef.current?.();
+  }, []);
 
   // Handle CWD changes
   useTermAiEvent(
@@ -271,13 +289,17 @@ export function useSettingsLoader({
     [sessionId]
   );
 
+  // Store fetchOllamaModels in ref for stable reference
+  const fetchOllamaModelsRef = useRef(fetchOllamaModels);
+  fetchOllamaModelsRef.current = fetchOllamaModels;
+
   // Handle fetch models requests
   useTermAiEvent(
     "termai-fetch-models",
     (payload: FetchModelsPayload) => {
-      fetchOllamaModels(payload.endpoint);
+      fetchOllamaModelsRef.current(payload.endpoint);
     },
-    [fetchOllamaModels]
+    []
   );
 
   // =============================================

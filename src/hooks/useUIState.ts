@@ -134,13 +134,20 @@ export function useUIState(options: UseUIStateOptions = {}) {
     agentStatus?.toLowerCase().includes("stalled") ||
     agentStatus?.toLowerCase().includes("input");
 
+  // Track previous needsAttention to only emit when it actually changes
+  const prevNeedsAttentionRef = useRef<boolean | undefined>(undefined);
+  
   // Emit needs-input event when attention state changes
   useEffect(() => {
-    emit("termai-ai-needs-input", {
-      needsInput: !!needsAttention,
-      reason: agentStatus || undefined,
-      sessionId,
-    });
+    // Only emit if needsAttention actually changed
+    if (prevNeedsAttentionRef.current !== !!needsAttention) {
+      prevNeedsAttentionRef.current = !!needsAttention;
+      emit("termai-ai-needs-input", {
+        needsInput: !!needsAttention,
+        reason: agentStatus || undefined,
+        sessionId,
+      });
+    }
   }, [needsAttention, agentStatus, sessionId]);
 
   // =============================================

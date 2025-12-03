@@ -8,7 +8,7 @@
  * - Command processing and execution flow
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { emit } from "../events";
 import {
   extractSingleCommand,
@@ -314,6 +314,12 @@ export function useAutoRunMachine({
   const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
   const [runningCommandId, setRunningCommandId] = useState<string | null>(null);
 
+  // Refs for stable callback references
+  const analyzeAndLearnRef = useRef(analyzeAndLearn);
+  const messagesRef = useRef(messages);
+  analyzeAndLearnRef.current = analyzeAndLearn;
+  messagesRef.current = messages;
+
   // =============================================
   // Stop Auto-Run
   // =============================================
@@ -330,18 +336,19 @@ export function useAutoRunMachine({
 
       // Trigger skill learning on successful completion
       const shouldLearn = reason === "complete" || summary.successfulSteps > 0;
+      const currentMessages = messagesRef.current;
       console.log("[AutoRunMachine] stopAutoRun:", {
         reason,
         successfulSteps: summary.successfulSteps,
         shouldLearn,
-        messageCount: messages.length,
+        messageCount: currentMessages.length,
       });
 
-      if (shouldLearn && messages.length >= 3) {
+      if (shouldLearn && currentMessages.length >= 3) {
         console.log("[AutoRunMachine] Triggering skill learning...");
         setTimeout(() => {
           const providerType = localStorage.getItem("termai_provider") || "gemini";
-          analyzeAndLearn(messages, "", providerType);
+          analyzeAndLearnRef.current(currentMessages, "", providerType);
         }, 1000);
       }
 
@@ -353,7 +360,7 @@ export function useAutoRunMachine({
         setRunningCommandId(null);
       }
     },
-    [isAutoRun, taskStartTime, taskSteps, runningCommandId, sessionId, analyzeAndLearn, messages, setAgentStatus]
+    [isAutoRun, taskStartTime, taskSteps, runningCommandId, sessionId, setAgentStatus]
   );
 
   // =============================================
@@ -394,9 +401,15 @@ export function useAutoRunMachine({
   // =============================================
   // Loop Prevention Effect
   // =============================================
+  // Use refs to avoid dependency on callback functions
+  const setMessagesRef = useRef(setMessages);
+  const setAgentStatusRef = useRef(setAgentStatus);
+  setMessagesRef.current = setMessages;
+  setAgentStatusRef.current = setAgentStatus;
+
   useEffect(() => {
     if (isAutoRun && detectResponseLoop(messages)) {
-      setMessages((prev) => [
+      setMessagesRef.current((prev) => [
         ...prev,
         {
           role: "system",
@@ -405,9 +418,9 @@ export function useAutoRunMachine({
         },
       ]);
       setIsAutoRun(false);
-      setAgentStatus("Loop detected. Stopped.");
+      setAgentStatusRef.current("Loop detected. Stopped.");
     }
-  }, [messages, isAutoRun, setMessages, setAgentStatus]);
+  }, [messages, isAutoRun]);
 
   // =============================================
   // Return Hook Interface
