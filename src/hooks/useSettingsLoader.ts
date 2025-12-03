@@ -27,12 +27,12 @@ export interface Message {
 }
 
 export interface SettingsLoaderOptions {
-  sessionId?: string;
-  initialCwd?: string;
+  sessionId?: string | undefined;
+  initialCwd?: string | undefined;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setAgentStatus: (status: string | null) => void;
   /** If true, only load settings when this becomes true (for inactive tabs) */
-  isActive?: boolean;
+  isActive?: boolean | undefined;
 }
 
 export interface SettingsLoaderResult {

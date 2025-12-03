@@ -34,7 +34,7 @@ export interface Message {
 }
 
 export interface AutoRunConfig {
-  sessionId?: string;
+  sessionId?: string | undefined;
   currentCwd: string;
   selectedModelId: string;
   models: ModelSpec[];
@@ -45,7 +45,7 @@ export interface SafetyCheckCallbacks {
   getCommandImpact: (command: string) => string | null;
   requestSafetyConfirmation: (opts: { 
     command: string; 
-    sessionId?: string | undefined; 
+    sessionId: string | undefined; 
     impact: string 
   }) => void;
 }
@@ -289,7 +289,7 @@ export function detectResponseLoop(messages: Message[]): boolean {
 // =============================================
 
 interface UseAutoRunMachineProps {
-  sessionId?: string;
+  sessionId?: string | undefined;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setAgentStatus: (status: string | null) => void;

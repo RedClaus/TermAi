@@ -1,6 +1,11 @@
 /**
  * AIPanel Component
- * Main AI chat interface - refactored to use extracted components and hooks
+ * Main AI chat interface - refactored to use extracted hooks
+ * 
+ * Uses:
+ * - useUIState: input, loading, status, dialogs
+ * - useSettingsLoader: API keys, models, CWD
+ * - useAutoRunMachine: auto-run state machine, task tracking
  */
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./AIPanel.module.css";
@@ -27,8 +32,8 @@ import { SessionManager } from "../../services/SessionManager";
 import { KnowledgeService } from "../../services/KnowledgeService";
 import { buildSystemPrompt } from "../../utils/promptBuilder";
 import { config } from "../../config";
-import { AVAILABLE_MODELS, isSmallModel, getModelSize } from "../../data/models";
 import { emit } from "../../events";
+import { isSmallModel } from "../../data/models";
 import {
   extractSingleCommand,
   isWriteFileBlock,
@@ -37,8 +42,13 @@ import {
 // Hooks
 import { useChatHistory } from "../../hooks/useChatHistory";
 import { useSafetyCheck } from "../../hooks/useSafetyCheck";
-import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import { useObserver } from "../../hooks/useObserver";
+import { useUIState, shouldShowComplexDialog } from "../../hooks/useUIState";
+import { useSettingsLoader } from "../../hooks/useSettingsLoader";
+import {
+  useAutoRunMachine,
+  isCodingCommand,
+} from "../../hooks/useAutoRunMachine";
 
 // Components
 import { ModelSelector } from "./ModelSelector";
@@ -47,23 +57,18 @@ import { APIKeyPrompt } from "./APIKeyPrompt";
 import { SafetyConfirmDialog } from "./SafetyConfirmDialog";
 import { ComplexRequestDialog } from "./ComplexRequestDialog";
 import { CommandPreview } from "./CommandPreview";
-import {
-  TaskCompletionSummary,
-  type TaskStep,
-  type TaskSummary,
-} from "./TaskCompletionSummary";
+import { TaskCompletionSummary } from "./TaskCompletionSummary";
 
 // Types
 import type { ProviderType } from "../../types";
 import type { ModelSpec } from "../../data/models";
-import type { CwdChangedPayload } from "../../events/types";
 
 interface AIPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  sessionId?: string;
-  isEmbedded?: boolean;
-  isActive?: boolean;
+  sessionId?: string | undefined;
+  isEmbedded?: boolean | undefined;
+  isActive?: boolean | undefined;
 }
 
 export const AIPanel: React.FC<AIPanelProps> = ({
@@ -74,32 +79,13 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   isActive = true,
 }) => {
   // =============================================
-  // State
+  // Local State (panel-specific)
   // =============================================
-  const [input, setInput] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [hasKey, setHasKey] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAutoRun, setIsAutoRun] = useState(false);
-  const [_autoRunCount, setAutoRunCount] = useState(0);
-  const [agentStatus, setAgentStatus] = useState<string | null>(null);
-  const [currentCwd, setCurrentCwd] = useState("~");
-  const [selectedModelId, setSelectedModelId] = useState(
-    AVAILABLE_MODELS[0].id,
-  );
-  const [models, setModels] = useState(AVAILABLE_MODELS);
   const [sessionName, setSessionName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
-  const [isCheckingKey, setIsCheckingKey] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
-  const [showComplexConfirm, setShowComplexConfirm] = useState(false);
-  const [pendingComplexMessage, setPendingComplexMessage] = useState("");
-  const [runningCommandId, setRunningCommandId] = useState<string | null>(null);
-
-  // Task tracking state
-  const [taskSteps, setTaskSteps] = useState<TaskStep[]>([]);
-  const [taskStartTime, setTaskStartTime] = useState<number | null>(null);
-  const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
+  const [isCheckingKey, setIsCheckingKey] = useState(false);
 
   // Command preview state for auto-run
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
@@ -108,16 +94,77 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     return saved === "true";
   });
 
-  // Lite mode for small LLMs
-  const [isLiteMode, setIsLiteMode] = useState(false);
-  const [liteModeNotified, setLiteModeNotified] = useState(false);
-
   // =============================================
-  // Hooks
+  // Chat History Hook
   // =============================================
   const { messages, setMessages, messagesEndRef, scrollToBottom } =
     useChatHistory({ sessionId });
 
+  // =============================================
+  // UI State Hook
+  // =============================================
+  const {
+    input,
+    isLoading,
+    agentStatus,
+    showComplexConfirm,
+    pendingComplexMessage,
+    needsAttention,
+    setInput,
+    setIsLoading,
+    setAgentStatus,
+    showComplexDialog,
+    hideComplexDialog,
+    clearInput,
+  } = useUIState({ sessionId });
+
+  // =============================================
+  // Observer Hook
+  // =============================================
+  const { isObserving, analyzeAndLearn } = useObserver();
+
+  // =============================================
+  // Settings Loader Hook
+  // =============================================
+  const {
+    hasKey,
+    models,
+    selectedModelId,
+    currentCwd,
+    isLiteMode,
+    handleModelSelect: baseHandleModelSelect,
+    fetchOllamaModels,
+    setHasKey,
+    setSelectedModelId,
+    setModels,
+  } = useSettingsLoader({
+    sessionId,
+    setMessages,
+    setAgentStatus,
+    isActive,
+  });
+
+  // =============================================
+  // Auto-Run Machine Hook
+  // =============================================
+  const {
+    isAutoRun,
+    taskSummary,
+    toggleAutoRun,
+    stopAutoRun,
+    dismissSummary,
+    incrementAutoRunCount,
+  } = useAutoRunMachine({
+    sessionId,
+    messages,
+    setMessages,
+    setAgentStatus,
+    analyzeAndLearn,
+  });
+
+  // =============================================
+  // Safety Check Hook
+  // =============================================
   const {
     showSafetyConfirm,
     pendingSafetyCommand,
@@ -128,160 +175,37 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     sessionId,
     onMessagesUpdate: setMessages,
     onStatusChange: setAgentStatus,
-    onAutoRunCountIncrement: () => setAutoRunCount((prev) => prev + 1),
+    onAutoRunCountIncrement: incrementAutoRunCount,
   });
 
-  const { isObserving, analyzeAndLearn } = useObserver();
+  // Include safety confirm in needsAttention calculation
+  const actualNeedsAttention = needsAttention || showSafetyConfirm;
 
   // =============================================
-  // Attention State - determines if AI needs user input
+  // Effects
   // =============================================
-  const needsAttention =
-    agentStatus?.toLowerCase().includes("waiting") ||
-    agentStatus?.toLowerCase().includes("stalled") ||
-    agentStatus?.toLowerCase().includes("input") ||
-    showSafetyConfirm;
 
-  // Emit event when attention state changes
+  // Load session name
   useEffect(() => {
-    emit("termai-ai-needs-input", {
-      needsInput: !!needsAttention,
-      reason: agentStatus || undefined,
-      sessionId,
-    });
-  }, [needsAttention, agentStatus, sessionId]);
+    if (sessionId) {
+      const saved = SessionManager.getSession(sessionId);
+      setSessionName(saved?.name || `Session ${sessionId.substring(0, 6)}`);
+    }
+  }, [sessionId]);
+
+  // Auto-scroll
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, agentStatus, isLoading, scrollToBottom]);
 
   // =============================================
-  // Stop Auto-Run and Generate Summary
-  // =============================================
-  const stopAutoRun = useCallback(
-    (reason: "user" | "complete" | "error" | "limit" = "user", narrative?: string) => {
-      if (!isAutoRun && !taskStartTime) return;
-
-      const endTime = Date.now();
-      const successfulSteps = taskSteps.filter((s) => s.exitCode === 0).length;
-      const failedSteps = taskSteps.filter((s) => s.exitCode !== 0).length;
-
-      // Detect if app might be running (check last few commands for server start patterns)
-      const recentSteps = taskSteps.slice(-3);
-      const serverPatterns =
-        /npm\s+(start|run\s+dev)|python.*main|node\s+|yarn\s+(start|dev)|flask\s+run|uvicorn|gunicorn/i;
-      const lastServerCommand = recentSteps.find(
-        (s) => serverPatterns.test(s.command) && s.exitCode === 0,
-      );
-
-      // Try to detect port from commands or output
-      let appPort: number | undefined;
-      const portMatch = recentSteps
-        .map((s) => s.output || s.command)
-        .join(" ")
-        .match(
-          /(?:port|PORT|localhost:|127\.0\.0\.1:|0\.0\.0\.0:)\s*(\d{4,5})/i,
-        );
-      if (portMatch) {
-        appPort = parseInt(portMatch[1], 10);
-      }
-
-      const summary: TaskSummary = {
-        totalSteps: taskSteps.length,
-        successfulSteps,
-        failedSteps,
-        steps: taskSteps,
-        startTime: taskStartTime || endTime,
-        endTime,
-        appStatus: lastServerCommand
-          ? "running"
-          : failedSteps > successfulSteps
-            ? "error"
-            : "stopped",
-        appPort,
-        finalMessage:
-          reason === "complete"
-            ? "Task completed successfully!"
-            : reason === "limit"
-              ? "Stopped: Maximum steps reached"
-              : reason === "error"
-                ? "Stopped due to errors"
-                : "Stopped by user",
-        narrative,
-      };
-
-      setTaskSummary(summary);
-      setIsAutoRun(false);
-      setAutoRunCount(0);
-      setAgentStatus(null);
-
-      // Auto-Learn on successful completion
-      if (reason === "complete" && successfulSteps > 0) {
-        setTimeout(() => {
-          analyzeAndLearn(messages, apiKey);
-        }, 1000);
-      }
-
-      // Cancel any running command
-      if (runningCommandId) {
-        emit("termai-cancel-command", {
-          commandId: runningCommandId,
-          sessionId,
-        });
-        setRunningCommandId(null);
-      }
-    },
-    [isAutoRun, taskStartTime, taskSteps, runningCommandId, sessionId, analyzeAndLearn, apiKey, messages],
-  );
-
-  const dismissSummary = useCallback(() => {
-    setTaskSummary(null);
-    setTaskSteps([]);
-    setTaskStartTime(null);
-  }, []);
-
-  // =============================================
-  // Ollama Model Fetching
-  // =============================================
-  const fetchOllamaModels = useCallback(
-    async (endpoint: string) => {
-      try {
-        const ollamaModels = await LLMManager.fetchOllamaModels(endpoint);
-        setModels((prev) => {
-          const nonOllama = prev.filter((p) => p.provider !== "ollama");
-          return [...nonOllama, ...ollamaModels];
-        });
-        localStorage.setItem("termai_ollama_endpoint", endpoint);
-        setHasKey(true);
-        setAgentStatus(`Fetched ${ollamaModels.length} local models!`);
-        setMessages((prev) => {
-          const isWelcome =
-            prev.length === 0 || (prev.length === 1 && prev[0].role === "ai");
-          if (isWelcome) {
-            return [
-              {
-                role: "ai",
-                content: `Connected to Ollama at ${endpoint}. Found ${ollamaModels.length} models. How can I help?`,
-              },
-            ];
-          }
-          return prev;
-        });
-        setTimeout(() => setAgentStatus(null), 3000);
-      } catch (error) {
-        console.error("Error fetching Ollama models:", error);
-        setAgentStatus("Error fetching models. Check endpoint.");
-        setTimeout(() => setAgentStatus(null), 3000);
-      }
-    },
-    [setMessages],
-  );
-
-  // =============================================
-  // API Key Saving
+  // API Key Saving (panel-specific)
   // =============================================
   const handleSaveKey = useCallback(
     async (key: string) => {
       const provider = localStorage.getItem("termai_provider") || "gemini";
-      
+
       if (provider === "ollama") {
-        // For Ollama, the "key" is actually the endpoint
         fetchOllamaModels(key || config.defaultOllamaEndpoint);
         return;
       }
@@ -294,8 +218,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         setHasKey(true);
         setApiKey(key);
         setAgentStatus("API key saved successfully!");
-        
-        // Fetch models after saving key
+
         const dynamicModels = await LLMManager.fetchModels(provider);
         if (dynamicModels.length > 0) {
           setModels((prev) => {
@@ -303,148 +226,194 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             return [...others, ...dynamicModels] as ModelSpec[];
           });
         }
-        
+
         setMessages([
           {
             role: "ai",
             content: `API key configured! How can I help you today?`,
           },
         ]);
-        
+
         setTimeout(() => setAgentStatus(null), 2000);
       } catch (error) {
         console.error("Error saving API key:", error);
-        setKeyError(error instanceof Error ? error.message : "Failed to save API key");
+        setKeyError(
+          error instanceof Error ? error.message : "Failed to save API key"
+        );
         setHasKey(false);
       } finally {
         setIsCheckingKey(false);
       }
     },
-    [fetchOllamaModels, setMessages],
+    [fetchOllamaModels, setMessages, setAgentStatus, setHasKey, setModels]
   );
 
   // =============================================
-  // Settings & Initialization
+  // Model Selection (wrap base handler)
   // =============================================
-  const loadSettings = useCallback(async () => {
-    const storedProvider = localStorage.getItem("termai_provider") || "gemini";
+  const handleModelSelect = useCallback(
+    (model: ModelSpec) => {
+      baseHandleModelSelect(model);
+      setSelectedModelId(model.id);
+    },
+    [baseHandleModelSelect, setSelectedModelId]
+  );
 
-    if (storedProvider === "ollama") {
-      const endpoint =
-        localStorage.getItem("termai_ollama_endpoint") ||
-        config.defaultOllamaEndpoint;
-      setHasKey(true);
-      fetchOllamaModels(endpoint);
-      return;
-    }
+  // =============================================
+  // Process Auto-Run Response
+  // =============================================
+  const processAutoRunResponse = useCallback(
+    (response: string) => {
+      const codeBlockRegex = /```(?:bash|sh|shell|zsh)?\n([\s\S]*?)\n```/g;
+      let match;
+      let foundCommand = false;
 
-    setIsCheckingKey(true);
-    try {
-      const hasServerKey = await LLMManager.hasApiKey(storedProvider);
-      setHasKey(hasServerKey);
+      while ((match = codeBlockRegex.exec(response)) !== null) {
+        const blockContent = match[1];
 
-      if (hasServerKey) {
-        // Fetch dynamic models
-        const dynamicModels = await LLMManager.fetchModels(storedProvider);
-        if (dynamicModels.length > 0) {
-          setModels((prev) => {
-            const others = prev.filter((p) => p.provider !== storedProvider);
-            return [...others, ...dynamicModels] as ModelSpec[];
+        if (isWriteFileBlock(response, match.index)) {
+          continue;
+        }
+
+        const nextCommand = extractSingleCommand(blockContent);
+        if (!nextCommand) continue;
+
+        foundCommand = true;
+        const impact = getCommandImpact(nextCommand);
+        if (impact) {
+          requestSafetyConfirmation({
+            command: nextCommand,
+            sessionId,
+            impact,
           });
-          if (storedProvider === "gemini") {
-            setAgentStatus(`Fetched ${dynamicModels.length} Gemini models`);
-            setTimeout(() => setAgentStatus(null), 2000);
+          setAgentStatus("Waiting for safety confirmation...");
+          return;
+        }
+
+        // If preview mode is enabled, show the command preview
+        if (previewEnabled) {
+          setPendingCommand(nextCommand);
+          setAgentStatus("Review command before execution...");
+          return;
+        }
+
+        // Otherwise execute immediately
+        incrementAutoRunCount();
+        emit("termai-run-command", { command: nextCommand, sessionId });
+        setAgentStatus(
+          isCodingCommand(nextCommand)
+            ? `Coding: ${nextCommand}`
+            : `Terminal: ${nextCommand}`
+        );
+        return;
+      }
+
+      if (!foundCommand) {
+        if (response.toLowerCase().includes("task complete")) {
+          let narrative = "";
+          const reportMatch = response.match(
+            /Mission Report:([\s\S]*?)Task Complete/i
+          );
+          if (reportMatch) {
+            narrative = reportMatch[1].trim();
+          } else {
+            narrative = response.replace(/task complete/i, "").trim();
           }
+          stopAutoRun("complete", narrative);
+        } else if (
+          response.includes("[ASK_USER]") ||
+          response.includes("[WAIT]") ||
+          response.includes("[NEED_HELP]")
+        ) {
+          setAgentStatus("Waiting for your input...");
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content:
+                "Auto-Run Stalled: No valid command found. The AI may have output invalid content or is waiting for guidance.",
+            },
+          ]);
+          setAgentStatus("Stalled. Waiting for input...");
         }
       }
 
-      if (!hasServerKey) {
-        setMessages([
-          {
-            role: "ai",
-            content: `Hi! I'm TermAI. Please configure your ${storedProvider.charAt(0).toUpperCase() + storedProvider.slice(1)} API key in Settings to get started.`,
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error("Error checking API key:", error);
-      setMessages([
-        {
-          role: "ai",
-          content:
-            "Unable to connect to the server. Make sure the TermAI backend is running.",
-        },
-      ]);
-      setHasKey(false);
-    } finally {
-      setIsCheckingKey(false);
-    }
-  }, [fetchOllamaModels, setMessages]);
-
-  // Load session name
-  useEffect(() => {
-    if (sessionId) {
-      const saved = SessionManager.getSession(sessionId);
-      setSessionName(saved?.name || `Session ${sessionId.substring(0, 6)}`);
-    }
-  }, [sessionId]);
-
-  // Load settings on mount (only when active tab)
-  useEffect(() => {
-    if (isActive) {
-      loadSettings();
-    }
-  }, [isOpen, isActive, loadSettings]);
-
-  // Emit thinking state
-  useEffect(() => {
-    emit("termai-ai-thinking", { isThinking: isLoading, sessionId });
-  }, [isLoading, sessionId]);
-
-  // Auto-scroll
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, agentStatus, isLoading, scrollToBottom]);
-
-  // =============================================
-  // Event Handlers using typed hooks
-  // =============================================
-  useTermAiEvent("termai-settings-changed", loadSettings, [loadSettings]);
-
-  useTermAiEvent(
-    "termai-cwd-changed",
-    (payload: CwdChangedPayload) => {
-      if (payload.sessionId === sessionId) {
-        setCurrentCwd(payload.cwd);
+      if (response.includes("[NEW_TAB]")) {
+        emit("termai-new-tab");
+        setAgentStatus("Opening new tab...");
       }
     },
-    [sessionId],
+    [
+      sessionId,
+      getCommandImpact,
+      requestSafetyConfirmation,
+      stopAutoRun,
+      setMessages,
+      previewEnabled,
+      incrementAutoRunCount,
+      setAgentStatus,
+    ]
   );
+
+  // Handle command preview actions
+  const handlePreviewExecute = useCallback(() => {
+    if (!pendingCommand) return;
+    incrementAutoRunCount();
+    emit("termai-run-command", { command: pendingCommand, sessionId });
+    setAgentStatus(
+      isCodingCommand(pendingCommand)
+        ? `Coding: ${pendingCommand}`
+        : `Terminal: ${pendingCommand}`
+    );
+    setPendingCommand(null);
+  }, [pendingCommand, sessionId, incrementAutoRunCount, setAgentStatus]);
+
+  const handlePreviewSkip = useCallback(() => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "system",
+        content: `Skipped command: \`${pendingCommand}\`\nPlease provide an alternative approach.`,
+      },
+    ]);
+    setPendingCommand(null);
+    setAgentStatus("Command skipped. Waiting for guidance...");
+  }, [pendingCommand, setMessages, setAgentStatus]);
+
+  // =============================================
+  // Save Session Name
+  // =============================================
+  const handleSaveSessionName = useCallback(() => {
+    setIsEditingName(false);
+    if (sessionId && sessionName.trim()) {
+      SessionManager.saveSession({
+        id: sessionId,
+        name: sessionName,
+        timestamp: Date.now(),
+        preview:
+          messages[messages.length - 1]?.content?.substring(0, 50) || "",
+      });
+    }
+  }, [sessionId, sessionName, messages]);
 
   // =============================================
   // Send Message
   // =============================================
   const handleSend = async (
     overrideInput?: string,
-    isNewConversation = false,
+    isNewConversation = false
   ) => {
     const textToSend = overrideInput ?? input;
     if (!textToSend.trim()) return;
 
     // Complex Request Check
-    if (
-      !overrideInput &&
-      messages.length > 2 &&
-      textToSend.length > 50 &&
-      !showComplexConfirm
-    ) {
-      setPendingComplexMessage(textToSend);
-      setShowComplexConfirm(true);
+    if (!overrideInput && shouldShowComplexDialog(textToSend, messages.length)) {
+      showComplexDialog(textToSend);
       return;
     }
 
-    setShowComplexConfirm(false);
-    setPendingComplexMessage("");
+    hideComplexDialog();
 
     if (isNewConversation) {
       setMessages([{ role: "ai", content: "Starting new conversation..." }]);
@@ -452,7 +421,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
     const userMsg = textToSend;
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setInput("");
+    clearInput();
     setIsLoading(true);
     setAgentStatus("Thinking...");
 
@@ -479,7 +448,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                 steps: s.tool_sops,
               })),
               null,
-              2,
+              2
             )}`
           : "";
 
@@ -487,10 +456,12 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
         skillsContext +
         `\nUser: ${userMsg}`;
-      // Check if selected model is small and needs lite prompt
+
       const selectedModel = models.find((m) => m.id === selectedModelId);
-      const useLiteMode = selectedModel ? isSmallModel(selectedModel) : isLiteMode;
-      
+      const useLiteMode = selectedModel
+        ? isSmallModel(selectedModel)
+        : isLiteMode;
+
       const systemPrompt = buildSystemPrompt({
         cwd: currentCwd,
         isAutoRun,
@@ -523,218 +494,6 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   };
 
   // =============================================
-  // Process Auto-Run Response
-  // =============================================
-  const processAutoRunResponse = useCallback(
-    (response: string) => {
-      const codeBlockRegex = /```(?:bash|sh|shell|zsh)?\n([\s\S]*?)\n```/g;
-      let match;
-      let foundCommand = false;
-
-      while ((match = codeBlockRegex.exec(response)) !== null) {
-        const blockContent = match[1];
-        
-        // Skip WRITE_FILE blocks (they contain file content, not commands)
-        if (isWriteFileBlock(response, match.index)) {
-          continue;
-        }
-
-        const nextCommand = extractSingleCommand(blockContent);
-        if (!nextCommand) continue;
-
-        foundCommand = true;
-        const impact = getCommandImpact(nextCommand);
-        if (impact) {
-          requestSafetyConfirmation({
-            command: nextCommand,
-            sessionId,
-            impact,
-          });
-          setAgentStatus("Waiting for safety confirmation...");
-          return;
-        }
-
-        // If preview mode is enabled, show the command preview
-        if (previewEnabled) {
-          setPendingCommand(nextCommand);
-          setAgentStatus("Review command before execution...");
-          return;
-        }
-
-        // Otherwise execute immediately
-        setAutoRunCount((prev) => prev + 1);
-        emit("termai-run-command", { command: nextCommand, sessionId });
-        const isCoding =
-          nextCommand.startsWith("echo") ||
-          nextCommand.startsWith("cat") ||
-          nextCommand.startsWith("printf") ||
-          nextCommand.includes(">");
-        setAgentStatus(
-          isCoding ? `Coding: ${nextCommand}` : `Terminal: ${nextCommand}`,
-        );
-        return;
-      }
-
-      if (!foundCommand) {
-        if (response.toLowerCase().includes("task complete")) {
-          // Extract narrative: try to find Mission Report, otherwise use full text
-          let narrative = "";
-          const reportMatch = response.match(/Mission Report:([\s\S]*?)Task Complete/i);
-          if (reportMatch) {
-             narrative = reportMatch[1].trim();
-          } else {
-             // Fallback: take the whole response minus "Task Complete"
-             narrative = response.replace(/task complete/i, "").trim();
-          }
-          stopAutoRun("complete", narrative);
-        } else if (
-          response.includes("[ASK_USER]") ||
-          response.includes("[WAIT]") ||
-          response.includes("[NEED_HELP]")
-        ) {
-          setAgentStatus("Waiting for your input...");
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content:
-                "Auto-Run Stalled: No valid command found. The AI may have output invalid content or is waiting for guidance.",
-            },
-          ]);
-          setAgentStatus("Stalled. Waiting for input...");
-        }
-      }
-
-      if (response.includes("[NEW_TAB]")) {
-        emit("termai-new-tab");
-        setAgentStatus("Opening new tab...");
-      }
-    },
-    [sessionId, getCommandImpact, requestSafetyConfirmation, stopAutoRun, setMessages, previewEnabled],
-  );
-
-  // Handle command preview actions
-  const handlePreviewExecute = useCallback(() => {
-    if (!pendingCommand) return;
-    setAutoRunCount((prev) => prev + 1);
-    emit("termai-run-command", { command: pendingCommand, sessionId });
-    const isCoding =
-      pendingCommand.startsWith("echo") ||
-      pendingCommand.startsWith("cat") ||
-      pendingCommand.startsWith("printf") ||
-      pendingCommand.includes(">");
-    setAgentStatus(
-      isCoding ? `Coding: ${pendingCommand}` : `Terminal: ${pendingCommand}`,
-    );
-    setPendingCommand(null);
-  }, [pendingCommand, sessionId]);
-
-  const handlePreviewSkip = useCallback(() => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "system",
-        content: `Skipped command: \`${pendingCommand}\`\nPlease provide an alternative approach.`,
-      },
-    ]);
-    setPendingCommand(null);
-    setAgentStatus("Command skipped. Waiting for guidance...");
-  }, [pendingCommand, setMessages]);
-
-  // =============================================
-  // Save Session Name
-  // =============================================
-  const handleSaveSessionName = useCallback(() => {
-    setIsEditingName(false);
-    if (sessionId && sessionName.trim()) {
-      SessionManager.saveSession({
-        id: sessionId,
-        name: sessionName,
-        timestamp: Date.now(),
-        preview: messages[messages.length - 1]?.content?.substring(0, 50) || "",
-      });
-    }
-  }, [sessionId, sessionName, messages]);
-
-  // =============================================
-  // Model Selection Handler
-  // =============================================
-  const handleModelSelect = (model: ModelSpec) => {
-    setSelectedModelId(model.id);
-    const newProvider = model.provider;
-    localStorage.setItem("termai_provider", newProvider);
-
-    // Check if this is a small model that needs lite mode
-    const needsLiteMode = isSmallModel(model);
-    const modelSize = getModelSize(model);
-    
-    if (needsLiteMode !== isLiteMode) {
-      setIsLiteMode(needsLiteMode);
-      setLiteModeNotified(false); // Reset notification flag for new model
-    }
-
-    // Notify user about lite mode
-    if (needsLiteMode && !liteModeNotified) {
-      setLiteModeNotified(true);
-      const sizeInfo = modelSize ? ` (${modelSize})` : "";
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content: `⚡ **Lite Mode Enabled** for ${model.name}${sizeInfo}
-
-This model has limited capacity, so TermAI is using a simplified prompt to ensure better results.
-
-**What this means:**
-- Shorter, more focused instructions
-- Basic command format only
-- May need more guidance for complex tasks
-
-**For better results with complex tasks**, consider using:
-- \`qwen2.5-coder:14b\` - Best for coding tasks
-- \`deepseek-coder-v2\` - Great code generation
-- \`dolphin-mixtral\` - Most capable (slower)
-- Cloud models (Gemini, Claude, GPT-4)`,
-        },
-      ]);
-    }
-
-    const storedKey = localStorage.getItem(`termai_${newProvider}_key`);
-    if (newProvider === "ollama") {
-      setHasKey(true);
-      setApiKey(storedKey || "http://localhost:11434");
-    } else {
-      setApiKey("");
-      // Check if server has key
-      LLMManager.hasApiKey(newProvider).then((hasIt) => {
-        setHasKey(hasIt);
-        if (hasIt) {
-          // Fetch models if we have key
-          LLMManager.fetchModels(newProvider).then((dynamicModels) => {
-            if (dynamicModels.length > 0) {
-              setModels((prev) => {
-                const others = prev.filter((p) => p.provider !== newProvider);
-                return [...others, ...dynamicModels] as ModelSpec[];
-              });
-            }
-          });
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: `Switched to ${model.name}. Please enter your ${newProvider} API key.`,
-            },
-          ]);
-        }
-      });
-    }
-
-    window.dispatchEvent(new Event("termai-settings-changed"));
-  };
-
-  // =============================================
   // Render
   // =============================================
   if (!isOpen) return null;
@@ -763,18 +522,7 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
               <input
                 type="checkbox"
                 checked={isAutoRun}
-                onChange={(e) => {
-                  const enabling = e.target.checked;
-                  setIsAutoRun(enabling);
-                  if (enabling) {
-                    // Starting auto-run - initialize task tracking
-                    setTaskStartTime(Date.now());
-                    setTaskSteps([]);
-                    setTaskSummary(null);
-                  } else {
-                    setAutoRunCount(0);
-                  }
-                }}
+                onChange={() => toggleAutoRun()}
                 style={{ accentColor: "var(--accent-primary)" }}
               />
               Auto-Run
@@ -785,10 +533,17 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
                   onClick={() => {
                     const newValue = !previewEnabled;
                     setPreviewEnabled(newValue);
-                    localStorage.setItem("termai_preview_mode", String(newValue));
+                    localStorage.setItem(
+                      "termai_preview_mode",
+                      String(newValue)
+                    );
                   }}
                   className={styles.iconButton}
-                  title={previewEnabled ? "Disable command preview (run immediately)" : "Enable command preview (2s delay)"}
+                  title={
+                    previewEnabled
+                      ? "Disable command preview (run immediately)"
+                      : "Enable command preview (2s delay)"
+                  }
                   style={{
                     color: previewEnabled
                       ? "var(--accent-primary)"
@@ -851,7 +606,11 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                   className={styles.input}
-                  style={{ padding: "2px 4px", height: "24px", width: "120px" }}
+                  style={{
+                    padding: "2px 4px",
+                    height: "24px",
+                    width: "120px",
+                  }}
                   autoFocus
                   onKeyDown={(e) =>
                     e.key === "Enter" && handleSaveSessionName()
@@ -894,17 +653,7 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
             <input
               type="checkbox"
               checked={isAutoRun}
-              onChange={(e) => {
-                const enabling = e.target.checked;
-                setIsAutoRun(enabling);
-                if (enabling) {
-                  setTaskStartTime(Date.now());
-                  setTaskSteps([]);
-                  setTaskSummary(null);
-                } else {
-                  setAutoRunCount(0);
-                }
-              }}
+              onChange={() => toggleAutoRun()}
               style={{ accentColor: "var(--accent-primary)" }}
             />
             Auto-Run
@@ -918,7 +667,11 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
                   localStorage.setItem("termai_preview_mode", String(newValue));
                 }}
                 className={styles.iconButton}
-                title={previewEnabled ? "Disable command preview" : "Enable command preview"}
+                title={
+                  previewEnabled
+                    ? "Disable command preview"
+                    : "Enable command preview"
+                }
                 style={{
                   color: previewEnabled
                     ? "var(--accent-primary)"
@@ -973,16 +726,16 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
           <div
             className={clsx(
               styles.agentStatus,
-              needsAttention && styles.waitingForInput,
+              actualNeedsAttention && styles.waitingForInput
             )}
           >
-            {needsAttention ? (
+            {actualNeedsAttention ? (
               <span style={{ fontSize: "16px" }}>👆</span>
             ) : (
               <Loader size={14} className={styles.spinner} />
             )}
             <span>{agentStatus}</span>
-            {needsAttention && (
+            {actualNeedsAttention && (
               <span className={styles.attentionBadge}>Input Required</span>
             )}
           </div>
@@ -1014,7 +767,7 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
           <div
             className={clsx(
               styles.inputContainer,
-              needsAttention && styles.needsAttention,
+              actualNeedsAttention && styles.needsAttention
             )}
           >
             <div className={styles.contextChips}>
@@ -1096,10 +849,7 @@ This model has limited capacity, so TermAI is using a simplified prompt to ensur
 
       {/* Task Completion Summary */}
       {taskSummary && (
-        <TaskCompletionSummary
-          summary={taskSummary}
-          onDismiss={dismissSummary}
-        />
+        <TaskCompletionSummary summary={taskSummary} onDismiss={dismissSummary} />
       )}
     </div>
   );

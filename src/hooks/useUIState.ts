@@ -34,9 +34,9 @@ export interface UIStateActions {
 }
 
 export interface UseUIStateOptions {
-  sessionId?: string;
+  sessionId?: string | undefined;
   /** Callback when loading state changes */
-  onLoadingChange?: (isLoading: boolean) => void;
+  onLoadingChange?: ((isLoading: boolean) => void) | undefined;
 }
 
 // =============================================
