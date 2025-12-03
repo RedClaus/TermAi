@@ -62,15 +62,21 @@ export interface SafetyCheckResult {
 
 export interface PendingSafetyCommand {
   command: string;
-  sessionId?: string;
-  impact?: string;
+  sessionId?: string | undefined;
+  impact?: string | undefined;
 }
 
 // ===========================================
 // Provider Types
 // ===========================================
 
-export type ProviderType = "gemini" | "openai" | "anthropic" | "ollama";
+export type ProviderType =
+  | "gemini"
+  | "openai"
+  | "anthropic"
+  | "ollama"
+  | "openrouter"
+  | "meta";
 
 export interface ProviderConfig {
   provider: ProviderType;

@@ -27,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [ollamaEndpoint, setOllamaEndpoint] = useState(
     config.defaultOllamaEndpoint,
   );
+  const [autoObserve, setAutoObserve] = useState(false);
 
   // API key inputs (only used for setting, never displayed)
   const [geminiKey, setGeminiKey] = useState("");
@@ -79,6 +80,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         localStorage.getItem("termai_ollama_endpoint") ||
         config.defaultOllamaEndpoint;
       setOllamaEndpoint(storedEndpoint);
+      const storedObserve =
+        localStorage.getItem("termai_auto_observe") === "true";
+      setAutoObserve(storedObserve);
     }
   }, [isOpen]);
 
@@ -172,6 +176,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       localStorage.setItem("termai_ollama_endpoint", ollamaEndpoint);
     }
 
+    localStorage.setItem("termai_auto_observe", String(autoObserve));
+
     // Notify other components that settings have changed
     window.dispatchEvent(new Event("termai-settings-changed"));
 
@@ -239,6 +245,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="ollama">Ollama (Local)</option>
               </select>
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <div className={styles.sectionTitle}>Intelligence</div>
+            <div className={styles.inputGroup}>
+              <label
+                className={styles.label}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={autoObserve}
+                  onChange={(e) => setAutoObserve(e.target.checked)}
+                  style={{ width: "16px", height: "16px" }}
+                />
+                Enable Continuous Learning (Auto-Observer)
+              </label>
+              <p className={styles.hint} style={{ marginTop: "8px" }}>
+                Automatically analyzes successful tasks to learn new skills.
+                <span
+                  style={{
+                    color: "var(--warning)",
+                    display: "block",
+                    marginTop: "4px",
+                  }}
+                >
+                  Warning: Uses extra tokens after each Auto-Run.
+                </span>
+              </p>
             </div>
           </div>
 

@@ -10,40 +10,46 @@
 export interface CommandStartedPayload {
   commandId: string;
   command: string;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface CommandOutputPayload {
   commandId: string;
   output: string;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface CommandFinishedPayload {
   command: string;
   output: string;
   exitCode: number;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface RunCommandPayload {
   command: string;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface CancelCommandPayload {
   commandId: string;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface CwdChangedPayload {
   cwd: string;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export interface AiThinkingPayload {
   isThinking: boolean;
-  sessionId?: string;
+  sessionId?: string | undefined;
+}
+
+export interface AiNeedsInputPayload {
+  needsInput: boolean;
+  reason?: string | undefined;
+  sessionId?: string | undefined;
 }
 
 export interface RestoreSessionPayload {
@@ -56,6 +62,11 @@ export interface FetchModelsPayload {
 
 export interface ThemeChangedPayload {
   theme: "dark" | "light";
+}
+
+export interface ToastPayload {
+  message: string;
+  type?: "success" | "error" | "info" | "warning";
 }
 
 // ===========================================
@@ -78,12 +89,14 @@ export interface TermAiEvents {
 
   // AI Events
   "termai-ai-thinking": AiThinkingPayload;
+  "termai-ai-needs-input": AiNeedsInputPayload;
   "termai-auto-continue": void;
 
   // Settings Events
   "termai-settings-changed": void;
   "termai-fetch-models": FetchModelsPayload;
   "termai-theme-changed": ThemeChangedPayload;
+  "termai-toast": ToastPayload;
 }
 
 // ===========================================
@@ -125,9 +138,11 @@ declare global {
     "termai-sessions-updated": CustomEvent<void>;
     "termai-cwd-changed": CustomEvent<CwdChangedPayload>;
     "termai-ai-thinking": CustomEvent<AiThinkingPayload>;
+    "termai-ai-needs-input": CustomEvent<AiNeedsInputPayload>;
     "termai-auto-continue": CustomEvent<void>;
     "termai-settings-changed": CustomEvent<void>;
     "termai-fetch-models": CustomEvent<FetchModelsPayload>;
     "termai-theme-changed": CustomEvent<ThemeChangedPayload>;
+    "termai-toast": CustomEvent<ToastPayload>;
   }
 }

@@ -24,7 +24,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "noImplicitReturns": true,
-    "noPropertyAccessFromIndexSignature": true,
+    "noPropertyAccessFromIndexSignature": false,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true
   },

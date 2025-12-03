@@ -9,9 +9,9 @@ import styles from "./ChatMessage.module.css";
 import type { Message } from "../../types";
 import { emit } from "../../events";
 
-interface ChatMessageProps {
+export interface ChatMessageProps {
   message: Message;
-  sessionId?: string;
+  sessionId?: string | undefined;
   isAutoRun: boolean;
 }
 

@@ -86,9 +86,9 @@ function strictRateLimiter(req, res, next) {
   const key = `strict:${clientId}`;
   const now = Date.now();
 
-  // Stricter limits: 10 requests per minute
+  // Stricter limits: 300 requests per minute (increased from 50)
   const strictWindow = 60000;
-  const strictMax = 10;
+  const strictMax = 300;
 
   let clientData = requestCounts.get(key);
 

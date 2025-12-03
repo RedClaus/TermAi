@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  termai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: termai
+    restart: unless-stopped
+    ports:
+      - "5173:5173"  # Frontend
+      - "3001:3001"  # Backend
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://localhost:3001
+      - VITE_WS_URL=http://localhost:3001
+      - VITE_DEFAULT_PROVIDER=gemini
+      - VITE_DEFAULT_OLLAMA_ENDPOINT=http://localhost:11434
+    volumes:
+      - ./server/logs:/app/server/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - termai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  termai-network:
+    driver: bridge
+
+volumes:
+  termai-logs:
+    driver: local

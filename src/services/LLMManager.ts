@@ -6,8 +6,13 @@
 
 import { config } from "../config";
 
+// Simple in-memory cache for hasApiKey to prevent request spam
+const apiKeyCache: Map<string, { value: boolean; timestamp: number }> = new Map();
+const CACHE_TTL = 30000; // 30 seconds
+let pendingRequests: Map<string, Promise<boolean>> = new Map();
+
 export interface LLMProvider {
-  chat(message: string, context?: string): Promise<string>;
+  chat(systemPrompt: string, context?: string, sessionId?: string): Promise<string>;
 }
 
 export interface ChatMessage {
@@ -34,7 +39,7 @@ export interface LLMResponse {
 class ProxyLLMProvider implements LLMProvider {
   private provider: string;
   private modelId: string;
-  private endpoint?: string;
+  private endpoint?: string | undefined;
 
   constructor(provider: string, modelId?: string, endpoint?: string) {
     this.provider = provider;
@@ -42,7 +47,7 @@ class ProxyLLMProvider implements LLMProvider {
     this.endpoint = endpoint;
   }
 
-  async chat(message: string, context?: string): Promise<string> {
+  async chat(systemPrompt: string, context?: string, sessionId?: string): Promise<string> {
     // Build messages array from context
     const messages: ChatMessage[] = [];
 
@@ -78,9 +83,6 @@ class ProxyLLMProvider implements LLMProvider {
       }
     }
 
-    // Add the current message
-    messages.push({ role: "user", content: message });
-
     try {
       const response = await fetch(config.getApiUrl(config.api.llm.chat), {
         method: "POST",
@@ -89,8 +91,9 @@ class ProxyLLMProvider implements LLMProvider {
           provider: this.provider,
           model: this.modelId,
           messages,
-          systemPrompt: context ? undefined : "You are a helpful assistant.",
+          systemPrompt: systemPrompt || "You are a helpful assistant.",
           endpoint: this.endpoint,
+          sessionId,
         }),
       });
 
@@ -130,6 +133,8 @@ export class LLMManager {
         return new ProxyLLMProvider("openai", modelId);
       case "anthropic":
         return new ProxyLLMProvider("anthropic", modelId);
+      case "openrouter":
+        return new ProxyLLMProvider("openrouter", modelId);
       case "ollama":
         // For Ollama, pass the endpoint
         const endpoint =
@@ -157,6 +162,8 @@ export class LLMManager {
         throw new Error(error.error || "Failed to set API key");
       }
 
+      // Clear cache so next hasApiKey call fetches fresh data
+      this.clearApiKeyCache(provider);
       return true;
     } catch (error) {
       console.error("Error setting API key:", error);
@@ -166,22 +173,59 @@ export class LLMManager {
 
   /**
    * Check if API key exists on the server
+   * Uses caching and request deduplication to prevent spam
    */
   static async hasApiKey(provider: string): Promise<boolean> {
-    try {
-      const response = await fetch(
-        `${config.getApiUrl(config.api.llm.hasKey)}?provider=${encodeURIComponent(provider)}`,
-      );
+    // Check cache first
+    const cached = apiKeyCache.get(provider);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.value;
+    }
 
-      if (!response.ok) {
+    // Check if there's already a pending request for this provider
+    const pending = pendingRequests.get(provider);
+    if (pending) {
+      return pending;
+    }
+
+    // Make new request and store promise for deduplication
+    const requestPromise = (async () => {
+      try {
+        const response = await fetch(
+          `${config.getApiUrl(config.api.llm.hasKey)}?provider=${encodeURIComponent(provider)}`,
+        );
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const data = await response.json();
+        const hasKey = data.hasKey;
+        
+        // Cache the result
+        apiKeyCache.set(provider, { value: hasKey, timestamp: Date.now() });
+        return hasKey;
+      } catch (error) {
+        console.error("Error checking API key:", error);
         return false;
+      } finally {
+        // Clean up pending request
+        pendingRequests.delete(provider);
       }
+    })();
 
-      const data = await response.json();
-      return data.hasKey;
-    } catch (error) {
-      console.error("Error checking API key:", error);
-      return false;
+    pendingRequests.set(provider, requestPromise);
+    return requestPromise;
+  }
+
+  /**
+   * Clear the API key cache (call after setting a new key)
+   */
+  static clearApiKeyCache(provider?: string): void {
+    if (provider) {
+      apiKeyCache.delete(provider);
+    } else {
+      apiKeyCache.clear();
     }
   }
 
@@ -204,6 +248,45 @@ export class LLMManager {
   }
 
   /**
+   * Fetch available models for a provider
+   */
+  static async fetchModels(
+    provider: string,
+    endpoint?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      provider: string;
+      intelligence: number;
+      speed: number;
+      cost: number;
+      contextWindow: string;
+      description: string;
+    }>
+  > {
+    try {
+      const url = new URL(config.getApiUrl(config.api.llm.models));
+      url.searchParams.append("provider", provider);
+      if (endpoint) {
+        url.searchParams.append("endpoint", endpoint);
+      }
+
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      return data.models || [];
+    } catch (error) {
+      console.error(`Error fetching models for ${provider}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Fetch available Ollama models
    */
   static async fetchOllamaModels(endpoint?: string): Promise<
@@ -211,6 +294,11 @@ export class LLMManager {
       id: string;
       name: string;
       provider: "ollama";
+      intelligence: number;
+      speed: number;
+      cost: number;
+      contextWindow: string;
+      description: string;
     }>
   > {
     const baseEndpoint = endpoint || config.defaultOllamaEndpoint;
@@ -225,7 +313,19 @@ export class LLMManager {
       }
 
       const data = await response.json();
-      return data.models;
+      // Add default values for the UI display properties
+      return (data.models as Array<{ id: string; name: string }>).map(
+        (model) => ({
+          id: model.id,
+          name: model.name,
+          provider: "ollama" as const,
+          intelligence: 80,
+          speed: 90,
+          cost: 0,
+          contextWindow: "8k",
+          description: `Local ${model.name} model via Ollama`,
+        }),
+      );
     } catch (error) {
       console.error("Error fetching Ollama models:", error);
       throw error;
@@ -233,5 +333,4 @@ export class LLMManager {
   }
 }
 
-// Re-export types for backward compatibility
-export type { LLMResponse, ChatMessage };
+// Types are already exported via interface declarations above

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "e5c6a7b6-ff5b-4f2f-b24d-6166adc3296d",
+    "timestamp": 1764787918355,
+    "use_when": "Testing via curl",
+    "tool_sops": [
+      {
+        "tool_name": "curl",
+        "action": "test"
+      }
+    ],
+    "preferences": "none"
+  },
+  {
+    "id": "2102a191-cf08-46b1-950f-be62a13eb423",
+    "timestamp": 1764793142209,
+    "use_when": "Test skill from curl",
+    "preferences": "none",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "echo test"
+      }
+    ]
+  },
+  {
+    "id": "141b2b4a-5b21-4956-9ce9-70762d5acc86",
+    "timestamp": 1764793938178,
+    "use_when": "Running a Python application from a shell script",
+    "preferences": "prefers using shell scripts for startup",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "./run_app.sh or python main.py"
+      }
+    ]
+  }
+]

@@ -89,26 +89,35 @@ install_dependencies() {
     fi
 }
 
-# Function to check if ports are available
+# Function to check if ports are available and kill existing processes
 check_ports() {
     print_status "Checking if ports are available..."
     
-    # Check port 3001 (backend)
-    if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_warning "Port 3001 is already in use. Backend may not start properly."
+    # Check and kill processes on port 3003 (backend)
+    if lsof -Pi :3003 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        print_warning "Port 3003 is already in use. Killing existing process..."
+        kill -9 $(lsof -Pi :3003 -sTCP:LISTEN -t) 2>/dev/null || true
+        sleep 1
+        print_success "Cleared port 3003 ✓"
     fi
     
-    # Check port 5173 (frontend)
+    # Check and kill processes on port 5173 (frontend)
     if lsof -Pi :5173 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        print_warning "Port 5173 is already in use. Frontend may not start properly."
+        print_warning "Port 5173 is already in use. Killing existing process..."
+        kill -9 $(lsof -Pi :5173 -sTCP:LISTEN -t) 2>/dev/null || true
+        sleep 1
+        print_success "Cleared port 5173 ✓"
     fi
+    
+    # Also kill any lingering node processes related to TermAi
+    pkill -f "node.*TermAi" 2>/dev/null || true
 }
 
 # Function to start the application
 start_app() {
     print_status "Starting TermAI application..."
     print_status "Frontend will be available at: http://localhost:5173"
-    print_status "Backend will be available at: http://localhost:3001"
+    print_status "Backend will be available at: http://localhost:3003"
     print_status ""
     print_status "Press Ctrl+C to stop both services"
     print_status ""

@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Block } from "./Block";
 import { InputArea } from "./InputArea";
 import { InteractiveBlock } from "./InteractiveBlock";
-import { Dashboard } from "./Dashboard";
+import { AIInputBox } from "./AIInputBox";
+import { GripHorizontal } from "lucide-react";
 import type { BlockData } from "../../types";
 import type {
   RunCommandPayload,
@@ -14,6 +15,10 @@ import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import styles from "./TerminalSession.module.css";
 import { v4 as uuidv4 } from "uuid";
 
+const MIN_AI_HEIGHT = 80;
+const MAX_AI_HEIGHT = 400;
+const DEFAULT_AI_HEIGHT = 140;
+
 interface TerminalSessionProps {
   sessionId?: string;
 }
@@ -23,8 +28,50 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
 }) => {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [cwd, setCwd] = useState("~");
+  const [aiBoxHeight, setAiBoxHeight] = useState(() => {
+    const saved = localStorage.getItem("termai_ai_box_height");
+    return saved ? parseInt(saved, 10) : DEFAULT_AI_HEIGHT;
+  });
+  const [isResizing, setIsResizing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentCommandRef = useRef<string | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize drag
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = resizeRef.current?.parentElement;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const newHeight = e.clientY - containerRect.top;
+      const clampedHeight = Math.min(
+        MAX_AI_HEIGHT,
+        Math.max(MIN_AI_HEIGHT, newHeight),
+      );
+      setAiBoxHeight(clampedHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      localStorage.setItem("termai_ai_box_height", aiBoxHeight.toString());
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, aiBoxHeight]);
 
   // Load history specific to session if provided
   useEffect(() => {
@@ -51,7 +98,53 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
       }
 
       const tempId = uuidv4();
-      const isInteractive = command.trim().startsWith("ssh");
+      
+      // Check for interactive commands that need PTY/xterm
+      const interactiveCommands = [
+        "ssh", "sudo", "nano", "vim", "vi", "emacs", 
+        "top", "htop", "less", "more", "man", 
+        "python", "python3", "node", "npm", "yarn", "pnpm", "bun",
+        "docker", "docker-compose", "git"
+      ];
+      
+      const firstWord = command.trim().split(/\s+/)[0];
+      const args = command.trim().split(/\s+/).slice(1);
+      
+      // Heuristic: Is this likely an interactive command or long-running process?
+      let isInteractive = false;
+
+      // 1. Explicit interactive tools
+      if (interactiveCommands.includes(firstWord)) {
+        // Special exclusions (non-interactive uses)
+        const isVersion = args.includes("-v") || args.includes("--version");
+        const isHelp = args.includes("-h") || args.includes("--help");
+        const isGitNonInteractive = firstWord === "git" && 
+          ["status", "log", "diff", "add", "commit", "push", "pull", "fetch", "clone"].includes(args[0]);
+        const isDockerNonInteractive = (firstWord === "docker" || firstWord === "docker-compose") &&
+          ["ps", "images", "info", "version"].includes(args[0]);
+        const isNpmNonInteractive = (firstWord === "npm" || firstWord === "yarn" || firstWord === "pnpm") &&
+          ["install", "i", "add", "remove", "test", "run build"].some(cmd => args[0] === cmd || (args[0] === "run" && args[1] === "build"));
+
+        if (!isVersion && !isHelp && !isGitNonInteractive && !isDockerNonInteractive && !isNpmNonInteractive) {
+          isInteractive = true;
+        }
+        
+        // REPLs are always interactive if no args (except flags)
+        if ((firstWord === "python" || firstWord === "python3" || firstWord === "node") && args.length === 0) {
+          isInteractive = true;
+        }
+      }
+
+      // 2. Shell scripts and local executables
+      if (command.includes(".sh") || command.startsWith("./")) {
+        isInteractive = true;
+      }
+
+      // 3. SSH is always interactive
+      if (command.trim().startsWith("ssh")) {
+        isInteractive = true;
+      }
+
       currentCommandRef.current = tempId;
 
       const pendingBlock: BlockData = {
@@ -83,7 +176,7 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
       }
 
       try {
-        const result = await executeCommand(command, cwd, tempId);
+        const result = await executeCommand(command, cwd, tempId, sessionId);
 
         setBlocks((prev) =>
           prev.map((b) =>
@@ -225,8 +318,25 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
 
   return (
     <div className={styles.container}>
+      {/* Persistent AI Input Box at top */}
+      <div
+        className={styles.aiBoxWrapper}
+        style={{ height: aiBoxHeight }}
+        ref={resizeRef}
+      >
+        <AIInputBox onCommand={handleExecute} sessionId={sessionId} cwd={cwd} />
+      </div>
+
+      {/* Resize handle */}
+      <div
+        className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ""}`}
+        onMouseDown={handleMouseDown}
+      >
+        <GripHorizontal size={16} />
+      </div>
+
+      {/* Terminal output area */}
       <div className={styles.scrollArea} ref={scrollRef}>
-        {blocks.length === 0 && <Dashboard onCommand={handleExecute} />}
         {blocks.map((block) =>
           block.isInteractive ? (
             <InteractiveBlock
@@ -236,7 +346,7 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
               onExit={(code) => handleInteractiveExit(block.id, code)}
             />
           ) : (
-            <Block key={block.id} data={block} />
+            <Block key={block.id} data={block} sessionId={sessionId} />
           ),
         )}
       </div>

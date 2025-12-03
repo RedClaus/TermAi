@@ -5,8 +5,8 @@
 
 export const config = {
   // API endpoints
-  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:3001",
-  wsUrl: import.meta.env.VITE_WS_URL || "http://localhost:3001",
+  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:3003",
+  wsUrl: import.meta.env.VITE_WS_URL || "http://localhost:3003",
 
   // Default settings
   defaultProvider: import.meta.env.VITE_DEFAULT_PROVIDER || "gemini",
@@ -32,6 +32,11 @@ export const config = {
     ollama: {
       tags: "/api/proxy/ollama/tags",
       chat: "/api/proxy/ollama/chat",
+    },
+    session: {
+      start: "/api/session/start",
+      end: "/api/session/end",
+      logs: "/api/session/logs",
     },
   },
 

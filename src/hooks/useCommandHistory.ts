@@ -8,8 +8,8 @@ const HISTORY_KEY = "termai_command_history";
 const MAX_HISTORY = 100;
 
 interface UseCommandHistoryOptions {
-  sessionId?: string;
-  maxHistory?: number;
+  sessionId?: string | undefined;
+  maxHistory?: number | undefined;
 }
 
 interface UseCommandHistoryReturn {
@@ -113,16 +113,6 @@ export function useCommandHistory(
   const resetNavigation = useCallback(() => {
     setHistoryIndex(-1);
   }, []);
-
-  // Store current input when starting navigation
-  const setCurrentInput = useCallback(
-    (input: string) => {
-      if (historyIndex === -1) {
-        currentInputRef.current = input;
-      }
-    },
-    [historyIndex],
-  );
 
   // Clear all history
   const clearHistory = useCallback(() => {

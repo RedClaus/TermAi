@@ -6,14 +6,14 @@ import React, { useState, useCallback, memo } from "react";
 import { Copy, Check, Play } from "lucide-react";
 import styles from "./CodeBlock.module.css";
 
-interface CodeBlockProps {
+export interface CodeBlockProps {
   code: string;
-  language?: string;
-  showLineNumbers?: boolean;
-  showCopy?: boolean;
-  showRun?: boolean;
-  onRun?: (code: string) => void;
-  maxHeight?: number;
+  language?: string | undefined;
+  showLineNumbers?: boolean | undefined;
+  showCopy?: boolean | undefined;
+  showRun?: boolean | undefined;
+  onRun?: ((code: string) => void) | undefined;
+  maxHeight?: number | undefined;
 }
 
 /**

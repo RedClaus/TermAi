@@ -21,6 +21,7 @@ export const executeCommand = async (
   command: string,
   cwd: string,
   commandId?: string,
+  sessionId?: string,
 ): Promise<ExecuteResult> => {
   try {
     const response = await fetch(config.getApiUrl(config.api.execute), {
@@ -28,7 +29,7 @@ export const executeCommand = async (
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ command, cwd, commandId }),
+      body: JSON.stringify({ command, cwd, commandId, sessionId }),
     });
 
     if (!response.ok) {

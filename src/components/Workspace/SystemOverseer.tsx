@@ -23,13 +23,18 @@ export const SystemOverseer: React.FC<SystemOverseerProps> = ({
   const [statusMessage, setStatusMessage] = useState("System Healthy");
 
   // Tracking state
-  const lastActivityRef = useRef<number>(Date.now());
+  const lastActivityRef = useRef<number>(0);
   const runningCommandRef = useRef<{ id: string; startTime: number } | null>(
     null,
   );
   const isAiThinkingRef = useRef<boolean>(false);
   const aiStartTimeRef = useRef<number>(0);
   const stateRef = useRef<SystemState>("healthy");
+
+  // Initialize lastActivityRef on mount
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;

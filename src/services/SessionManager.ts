@@ -1,21 +1,94 @@
+import { SessionLogService } from "./SessionLogService";
+
 export interface SavedSession {
     id: string;
     name: string;
     timestamp: number;
     preview: string;
+    isActive?: boolean;
 }
 
 const STORAGE_KEY = 'termai_saved_sessions';
+const ACTIVE_SESSIONS_KEY = 'termai_active_sessions';
 
 export class SessionManager {
+    // Track active sessions that have been started on backend
+    private static activeSessions: Set<string> = new Set();
+
+    static {
+        // Load active sessions from storage on init
+        try {
+            const stored = localStorage.getItem(ACTIVE_SESSIONS_KEY);
+            if (stored) {
+                const ids = JSON.parse(stored) as string[];
+                ids.forEach(id => this.activeSessions.add(id));
+            }
+        } catch (e) {
+            console.error('Failed to load active sessions', e);
+        }
+    }
+
+    private static saveActiveSessions(): void {
+        localStorage.setItem(
+            ACTIVE_SESSIONS_KEY, 
+            JSON.stringify(Array.from(this.activeSessions))
+        );
+    }
+
     static getSessions(): SavedSession[] {
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            return stored ? JSON.parse(stored) : [];
+            const sessions = stored ? JSON.parse(stored) : [];
+            // Mark active sessions
+            return sessions.map((s: SavedSession) => ({
+                ...s,
+                isActive: this.activeSessions.has(s.id)
+            }));
         } catch (e) {
             console.error('Failed to load sessions', e);
             return [];
         }
+    }
+
+    /**
+     * Start a new session - creates both frontend and backend session
+     */
+    static async startSession(sessionId: string, name?: string): Promise<SavedSession> {
+        // Start backend session log
+        await SessionLogService.startSession(sessionId);
+        this.activeSessions.add(sessionId);
+        this.saveActiveSessions();
+
+        const session: SavedSession = {
+            id: sessionId,
+            name: name || `Session ${sessionId.substring(0, 6)}`,
+            timestamp: Date.now(),
+            preview: '',
+            isActive: true
+        };
+
+        this.saveSession(session);
+        console.log(`[SessionManager] Started session: ${sessionId}`);
+        return session;
+    }
+
+    /**
+     * End a session - closes backend session log
+     */
+    static async endSession(sessionId: string): Promise<void> {
+        await SessionLogService.endSession(sessionId);
+        this.activeSessions.delete(sessionId);
+        this.saveActiveSessions();
+
+        // Update session in storage
+        const sessions = this.getSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        if (session) {
+            session.isActive = false;
+            this.saveSession(session);
+        }
+
+        console.log(`[SessionManager] Ended session: ${sessionId}`);
     }
 
     static saveSession(session: SavedSession): void {
@@ -23,7 +96,7 @@ export class SessionManager {
         const index = sessions.findIndex(s => s.id === session.id);
 
         if (index >= 0) {
-            sessions[index] = session;
+            sessions[index] = { ...sessions[index], ...session };
         } else {
             sessions.push(session);
         }
@@ -35,7 +108,18 @@ export class SessionManager {
         window.dispatchEvent(new CustomEvent('termai-sessions-updated'));
     }
 
-    static deleteSession(id: string): void {
+    static async deleteSession(id: string): Promise<void> {
+        // End backend session if active
+        if (this.activeSessions.has(id)) {
+            await SessionLogService.endSession(id);
+            this.activeSessions.delete(id);
+            this.saveActiveSessions();
+        }
+
+        // Delete the backend session log file
+        await SessionLogService.deleteSessionLog(id);
+
+        // Remove from localStorage
         const sessions = this.getSessions().filter(s => s.id !== id);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
         window.dispatchEvent(new CustomEvent('termai-sessions-updated'));
@@ -52,5 +136,16 @@ export class SessionManager {
 
     static getSession(id: string): SavedSession | undefined {
         return this.getSessions().find(s => s.id === id);
+    }
+
+    static isSessionActive(id: string): boolean {
+        return this.activeSessions.has(id);
+    }
+
+    /**
+     * Generate a new unique session ID
+     */
+    static generateSessionId(): string {
+        return `ses_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
     }
 }

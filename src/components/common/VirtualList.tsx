@@ -204,7 +204,7 @@ export const VirtualList = memo(VirtualListInner) as typeof VirtualListInner;
 /**
  * Hook for using virtual list with dynamic heights
  */
-export function useVirtualList<T>(items: T[], estimatedItemHeight: number) {
+export function useVirtualList<T>(_items: T[], estimatedItemHeight: number) {
   const [measuredHeights, setMeasuredHeights] = useState<Map<number, number>>(
     new Map(),
   );

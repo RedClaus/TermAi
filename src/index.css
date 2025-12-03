@@ -1,48 +1,92 @@
 :root {
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --text-primary: #c9d1d9;
-  --text-secondary: #8b949e;
-  --accent-primary: #58a6ff;
-  --accent-secondary: #1f6feb;
-  --border-color: #30363d;
-  --success: #238636;
-  --error: #da3633;
-  --warning: #d29922;
+  /* Catppuccin Mocha Base Colors */
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-tertiary: #313244;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --border-color: #45475a;
+  
+  /* Primary Accent - Blue */
+  --accent-primary: #89b4fa;
+  --accent-secondary: #74c7ec;
+  --accent-hover: #b4befe;
+  
+  /* Status Colors */
+  --success: #a6e3a1;
+  --error: #f38ba8;
+  --warning: #f9e2af;
+  
+  /* AI-Specific Colors - Mauve/Purple theme */
+  --ai-primary: #cba6f7;
+  --ai-secondary: #b4befe;
+  --ai-bg: rgba(203, 166, 247, 0.08);
+  --ai-border: rgba(203, 166, 247, 0.3);
+  --ai-glow: rgba(203, 166, 247, 0.4);
+  
+  /* Terminal Colors - Green theme */
+  --terminal-prompt: #a6e3a1;
+  --terminal-command: #89dceb;
+  --terminal-output: #cdd6f4;
+  
+  /* User Message Colors - Teal */
+  --user-bg: #94e2d5;
+  --user-text: #1e1e2e;
 
   /* App Theme */
-  --block-bg: #161b22;
-  --input-bg: #21262d;
-  --chip-bg: rgba(88, 166, 255, 0.15);
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --block-bg: #181825;
+  --input-bg: #313244;
+  --chip-bg: rgba(137, 180, 250, 0.15);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
 
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 [data-theme='light'] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f6f8fa;
-  --bg-tertiary: #eaeef2;
-  --text-primary: #24292f;
-  --text-secondary: #57606a;
-  --accent-primary: #0969da;
-  --accent-secondary: #0550ae;
-  --border-color: #d0d7de;
-  --success: #1a7f37;
-  --error: #cf222e;
-  --warning: #9a6700;
+  /* Catppuccin Latte Base Colors */
+  --bg-primary: #eff1f5;
+  --bg-secondary: #e6e9ef;
+  --bg-tertiary: #ccd0da;
+  --text-primary: #4c4f69;
+  --text-secondary: #6c6f85;
+  --border-color: #9ca0b0;
+  
+  /* Primary Accent - Blue */
+  --accent-primary: #1e66f5;
+  --accent-secondary: #04a5e5;
+  --accent-hover: #7287fd;
+  
+  /* Status Colors */
+  --success: #40a02b;
+  --error: #d20f39;
+  --warning: #df8e1d;
+  
+  /* AI-Specific Colors - Mauve/Purple theme */
+  --ai-primary: #8839ef;
+  --ai-secondary: #7287fd;
+  --ai-bg: rgba(136, 57, 239, 0.08);
+  --ai-border: rgba(136, 57, 239, 0.3);
+  --ai-glow: rgba(136, 57, 239, 0.3);
+  
+  /* Terminal Colors - Green theme */
+  --terminal-prompt: #40a02b;
+  --terminal-command: #04a5e5;
+  --terminal-output: #4c4f69;
+  
+  /* User Message Colors - Teal */
+  --user-bg: #179299;
+  --user-text: #eff1f5;
 
   /* App Theme Light */
-  --block-bg: #ffffff;
-  --input-bg: #f6f8fa;
-  --chip-bg: rgba(9, 105, 218, 0.1);
+  --block-bg: #e6e9ef;
+  --input-bg: #ccd0da;
+  --chip-bg: rgba(30, 102, 245, 0.1);
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 * {

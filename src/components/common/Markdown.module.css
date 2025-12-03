@@ -5,7 +5,7 @@
 .markdown {
   font-size: 0.9rem;
   line-height: 1.6;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--ai-primary, #cba6f7);
 }
 
 /* Paragraphs */
@@ -72,10 +72,10 @@
 .blockquote {
   margin: 0.75rem 0;
   padding: 0.5rem 1rem;
-  border-left: 3px solid var(--accent-color, #007acc);
-  background: var(--bg-secondary, #2a2a2a);
+  border-left: 3px solid var(--ai-secondary, #b4befe);
+  background: var(--ai-bg, rgba(203, 166, 247, 0.08));
   border-radius: 0 4px 4px 0;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--ai-secondary, #b4befe);
   font-style: italic;
 }
 
@@ -98,14 +98,14 @@
 }
 
 .list li::marker {
-  color: var(--accent-color, #007acc);
+  color: var(--ai-primary, #cba6f7);
 }
 
 /* Links */
 .link {
-  color: var(--accent-color, #007acc);
+  color: var(--accent-secondary, #74c7ec);
   text-decoration: none;
-  border-bottom: 1px dotted var(--accent-color, #007acc);
+  border-bottom: 1px dotted var(--accent-secondary, #74c7ec);
   transition: opacity 0.15s ease;
 }
 
@@ -116,12 +116,12 @@
 /* Strong and Emphasis */
 .markdown strong {
   font-weight: 600;
-  color: var(--text-primary, #ffffff);
+  color: var(--text-primary, #cdd6f4);
 }
 
 .markdown em {
   font-style: italic;
-  color: var(--text-secondary, #c0c0c0);
+  color: var(--ai-secondary, #b4befe);
 }
 
 /* Horizontal Rules (if added later) */

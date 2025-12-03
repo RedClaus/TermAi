@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Enhanced startup files
+/tmp/termai.pid
+
+# Environment files (contain local config)
+.env
+server/.env

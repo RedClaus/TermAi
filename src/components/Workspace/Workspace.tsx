@@ -13,7 +13,7 @@ interface WorkspaceProps {
 
 type Layout = 'side-right' | 'side-left' | 'bottom' | 'top';
 
-export const Workspace: React.FC<WorkspaceProps> = ({ sessionId }) => {
+export const Workspace: React.FC<WorkspaceProps> = ({ sessionId, isActive }) => {
     const [layout, setLayout] = useState<Layout>('side-right');
     const [isAIOpen, setIsAIOpen] = useState(true);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -185,6 +185,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ sessionId }) => {
                             onClose={() => setIsAIOpen(false)}
                             sessionId={sessionId}
                             isEmbedded={true}
+                            isActive={isActive}
                         />
                     </div>
                 )}

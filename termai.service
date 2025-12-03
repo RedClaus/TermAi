@@ -1,0 +1,34 @@
+[Unit]
+Description=TermAI - AI-Powered Terminal Assistant
+Documentation=https://github.com/RedClaus/TermAi
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+User=normanking
+Group=normanking
+WorkingDirectory=/home/normanking/github/TermAi
+ExecStart=/home/normanking/github/TermAi/startup.sh --skip-install
+ExecStop=/home/normanking/github/TermAi/startup.sh --stop
+ExecReload=/home/normanking/github/TermAi/startup.sh --restart
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=termai
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=TERMAI_FRONTEND_PORT=5173
+Environment=TERMAI_BACKEND_PORT=3001
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/normanking/github/TermAi
+
+[Install]
+WantedBy=multi-user.target

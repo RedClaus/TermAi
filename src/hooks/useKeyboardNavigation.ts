@@ -154,7 +154,7 @@ export function useGlobalShortcut(
  * Hook for focus trap within a container
  */
 export function useFocusTrap(
-  containerRef: React.RefObject<HTMLElement>,
+  containerRef: React.RefObject<HTMLElement | null>,
   enabled = true,
 ): void {
   useEffect(() => {

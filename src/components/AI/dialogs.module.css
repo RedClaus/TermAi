@@ -20,6 +20,14 @@
   border-color: var(--error);
 }
 
+.warningDialog {
+  border-color: var(--warning, #f5a623);
+}
+
+.infoDialog {
+  border-color: var(--accent-primary);
+}
+
 /* Dialog Header */
 .dialogHeader {
   display: flex;
@@ -113,4 +121,20 @@
   background: var(--error);
   color: white;
   font-weight: 600;
+}
+
+.allowAllButton {
+  background: var(--accent-secondary, #4a9eff);
+  color: white;
+  font-weight: 500;
+}
+
+/* Info Block (for low-risk commands) */
+.infoBlock {
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 8px;
+  background: rgba(74, 158, 255, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid var(--accent-primary);
 }

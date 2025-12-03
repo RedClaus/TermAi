@@ -17,7 +17,15 @@ const pty = require("node-pty");
 
 // Import configuration and middleware
 const { config } = require("./config");
-const { requestLogger, logError } = require("./middleware/logger");
+const {
+  requestLogger,
+  logError,
+  logCommand,
+  getSessionLogs,
+  readSessionLog,
+  startSessionLog,
+  endSessionLog,
+} = require("./middleware/logger");
 const { rateLimiter, strictRateLimiter } = require("./middleware/rateLimiter");
 const {
   validateCommand,
@@ -32,6 +40,7 @@ const {
 
 // Import routes
 const llmRoutes = require("./routes/llm");
+const knowledgeRoutes = require("./routes/knowledge");
 
 const app = express();
 const server = http.createServer(app);
@@ -89,9 +98,102 @@ app.get("/api/health", (req, res) => {
 });
 
 // ===========================================
-// LLM Routes (with strict rate limiting)
+// Client Info (for system detection)
 // ===========================================
-app.use("/api/llm", strictRateLimiter, llmRoutes);
+app.get("/api/client-info", (req, res) => {
+  // Get client IP from various headers (handles proxies)
+  const clientIP =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.headers["x-real-ip"] ||
+    req.socket?.remoteAddress ||
+    req.ip ||
+    "Unknown";
+
+  // Get server's local IP addresses
+  const networkInterfaces = os.networkInterfaces();
+  const serverIPs = [];
+  for (const iface of Object.values(networkInterfaces)) {
+    for (const addr of iface || []) {
+      if (addr.family === "IPv4" && !addr.internal) {
+        serverIPs.push(addr.address);
+      }
+    }
+  }
+
+  // Get server OS info
+  const serverOS = {
+    platform: os.platform(),
+    release: os.release(),
+    arch: os.arch(),
+    hostname: os.hostname(),
+  };
+
+  res.json({
+    clientIP: clientIP.replace("::ffff:", ""), // Clean IPv6-mapped IPv4
+    serverIP: serverIPs[0] || "127.0.0.1",
+    serverIPs,
+    serverOS,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ===========================================
+// Session Logging API
+// ===========================================
+
+// Start a new session log
+app.post("/api/session/start", (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+  const logFile = startSessionLog(sessionId);
+  res.json({ success: true, logFile });
+});
+
+// End a session log
+app.post("/api/session/end", (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+  endSessionLog(sessionId);
+  res.json({ success: true });
+});
+
+// List all session logs
+app.get("/api/session/logs", (req, res) => {
+  const logs = getSessionLogs();
+  res.json({ logs });
+});
+
+// Get a specific session log
+app.get("/api/session/logs/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  const content = readSessionLog(sessionId);
+  if (content === null) {
+    return res.status(404).json({ error: "Session log not found" });
+  }
+  res.json({ sessionId, content });
+});
+
+// Delete a session log
+app.delete("/api/session/logs/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  const { deleteSessionLog } = require("./middleware/logger");
+  
+  const success = deleteSessionLog(sessionId);
+  if (!success) {
+    return res.status(404).json({ error: "Session log not found or could not be deleted" });
+  }
+  res.json({ success: true, message: `Session log ${sessionId} deleted` });
+});
+
+// ===========================================
+// LLM Routes (Rate limiting handled per-route)
+// ===========================================
+app.use("/api/llm", llmRoutes);
+app.use("/api/knowledge", knowledgeRoutes);
 
 // ===========================================
 // Process Management
@@ -123,14 +225,17 @@ app.post("/api/cancel", (req, res) => {
 // Command Execution
 // ===========================================
 app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
-  const { command, cwd, commandId } = req.body;
+  const { command, cwd, commandId, sessionId } = req.body;
 
   // Default to home dir if no cwd provided
   let currentDir = cwd ? expandHome(cwd) : os.homedir();
 
-  // Handle "cd" command specifically
-  if (command.trim().startsWith("cd ")) {
-    const target = command.trim().substring(3).trim();
+  // Handle standalone "cd" command specifically (not compound commands like "cd x && y")
+  const trimmedCmd = command.trim();
+  const isCompoundCommand = /[;&|]/.test(trimmedCmd);
+
+  if (trimmedCmd.startsWith("cd ") && !isCompoundCommand) {
+    const target = trimmedCmd.substring(3).trim();
     let newDir = target;
 
     if (target === "~") {
@@ -172,6 +277,11 @@ app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
       if (commandId) delete activeProcesses[commandId];
 
       if (error) {
+        // Log command execution
+        logCommand(sessionId, command, currentDir, {
+          exitCode: error.code || 1,
+          output: stderr || error.message,
+        });
         return res.json({
           output: stderr || error.message,
           exitCode: error.code || 1,
@@ -179,6 +289,11 @@ app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
         });
       }
 
+      // Log successful command execution
+      logCommand(sessionId, command, currentDir, {
+        exitCode: 0,
+        output: stdout,
+      });
       return res.json({
         output: stdout,
         exitCode: 0,

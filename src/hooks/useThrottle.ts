@@ -18,14 +18,15 @@ export function useThrottle<T>(value: T, interval: number): T {
     if (timeSinceLastUpdate >= interval) {
       lastUpdated.current = now;
       setThrottledValue(value);
-    } else {
-      const timer = setTimeout(() => {
-        lastUpdated.current = Date.now();
-        setThrottledValue(value);
-      }, interval - timeSinceLastUpdate);
-
-      return () => clearTimeout(timer);
+      return;
     }
+
+    const timer = setTimeout(() => {
+      lastUpdated.current = Date.now();
+      setThrottledValue(value);
+    }, interval - timeSinceLastUpdate);
+
+    return () => clearTimeout(timer);
   }, [value, interval]);
 
   return throttledValue;

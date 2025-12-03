@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import styles from "./InputArea.module.css";
-import { Play, Sparkles, Clock } from "lucide-react";
+import { Play, Rocket, Clock } from "lucide-react";
 import { useCommandHistory } from "../../hooks/useCommandHistory";
 
 interface InputAreaProps {
@@ -20,7 +20,6 @@ export const InputArea = memo<InputAreaProps>(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const {
-      history,
       addToHistory,
       navigateUp,
       navigateDown,
@@ -163,7 +162,7 @@ export const InputArea = memo<InputAreaProps>(
               title="AI Command Search"
               type="button"
             >
-              <Sparkles size={16} />
+              <Rocket size={16} />
             </button>
             <button
               className={styles.actionBtn}

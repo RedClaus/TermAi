@@ -3,11 +3,7 @@
  * Provides type-safe event emission and listening
  */
 
-import type {
-  TermAiEvents,
-  TermAiEventName,
-  TermAiEventPayload,
-} from "./types";
+import type { TermAiEventName, TermAiEventPayload } from "./types";
 
 /**
  * Emit a typed event

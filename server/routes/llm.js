@@ -5,6 +5,8 @@
 
 const express = require("express");
 const { getApiKey, setApiKey, hasApiKey } = require("../config");
+const { logAIInteraction } = require("../middleware/logger");
+const { strictRateLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
@@ -16,7 +18,7 @@ const router = express.Router();
  * POST /api/llm/set-key
  * Set API key for a provider (stored in memory only)
  */
-router.post("/set-key", (req, res) => {
+router.post("/set-key", strictRateLimiter, (req, res) => {
   const { provider, apiKey } = req.body;
 
   if (!provider || !apiKey) {
@@ -68,7 +70,7 @@ router.get("/has-key/all", (req, res) => {
  * POST /api/llm/chat
  * Unified chat endpoint for all providers
  */
-router.post("/chat", async (req, res) => {
+router.post("/chat", strictRateLimiter, async (req, res) => {
   const { provider, model, messages, systemPrompt } = req.body;
 
   if (!provider) {
@@ -76,6 +78,10 @@ router.post("/chat", async (req, res) => {
   }
 
   const apiKey = getApiKey(provider);
+
+  console.log(
+    `[LLM Chat] Provider: ${provider}, Model: ${model}, Has API Key: ${!!apiKey}, Key length: ${apiKey?.length || 0}`,
+  );
 
   // For Ollama, no API key needed
   if (provider !== "ollama" && !apiKey) {
@@ -123,6 +129,18 @@ router.post("/chat", async (req, res) => {
       default:
         return res.status(400).json({ error: `Unknown provider: ${provider}` });
     }
+
+    // Log AI interaction
+    const sessionId = req.body.sessionId;
+    const inputLength =
+      messages?.reduce((sum, m) => sum + (m.content?.length || 0), 0) || 0;
+    logAIInteraction(
+      sessionId,
+      provider,
+      model,
+      inputLength,
+      response.content?.length || 0,
+    );
 
     res.json(response);
   } catch (error) {
@@ -230,16 +248,49 @@ async function handleOpenAIChat(apiKey, model, messages, systemPrompt) {
 async function handleAnthropicChat(apiKey, model, messages, systemPrompt) {
   const Anthropic = require("@anthropic-ai/sdk");
 
-  const client = new Anthropic({ apiKey });
+  // Trim whitespace from API key
+  const cleanApiKey = apiKey?.trim();
+  console.log(
+    `[Anthropic] API Key starts with: ${cleanApiKey?.substring(0, 10)}..., length: ${cleanApiKey?.length}`,
+  );
 
-  // Map model IDs
+  const client = new Anthropic({ apiKey: cleanApiKey });
+
+  // Map model IDs - using correct Anthropic model names
   const modelMap = {
-    "claude-3-opus": "claude-3-opus-20240229",
-    "claude-3-5-sonnet": "claude-3-5-sonnet-20241022",
-    "claude-4-5-sonnet-thinking": "claude-3-5-sonnet-20241022",
-    auto: "claude-3-5-sonnet-20241022",
+    "claude-sonnet-4": "claude-sonnet-4-20250514",
+    "claude-3-5-sonnet": "claude-3-5-sonnet-latest",
+    "claude-3-opus": "claude-3-opus-latest",
+    auto: "claude-sonnet-4-20250514",
   };
-  const realModel = modelMap[model] || model || "claude-3-5-sonnet-20241022";
+
+  // Normalize model ID and apply mapping
+  const normalizedModel = model?.trim()?.toLowerCase() || "auto";
+  let realModel = modelMap[normalizedModel];
+
+  // If not in map, check if it's already a valid full model name
+  if (!realModel) {
+    if (
+      normalizedModel.includes("sonnet-4") ||
+      normalizedModel.includes("sonnet4")
+    ) {
+      realModel = "claude-sonnet-4-20250514";
+    } else if (
+      normalizedModel.includes("3-5-sonnet") ||
+      normalizedModel.includes("3.5")
+    ) {
+      realModel = "claude-3-5-sonnet-latest";
+    } else if (normalizedModel.includes("opus")) {
+      realModel = "claude-3-opus-latest";
+    } else {
+      // Default to claude-sonnet-4
+      realModel = "claude-sonnet-4-20250514";
+    }
+  }
+
+  console.log(
+    `[Anthropic] Model requested: "${model}" -> Using: "${realModel}"`,
+  );
 
   // Build messages array (Anthropic format)
   const anthropicMessages = [];
@@ -384,10 +435,62 @@ router.get("/models", async (req, res) => {
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
+  } else if (provider === "gemini") {
+    const apiKey = getApiKey("gemini");
+    if (!apiKey) {
+      return res.json({ models: [] });
+    }
+
+    try {
+      const models = await handleGeminiModels(apiKey);
+      res.json({ models });
+    } catch (error) {
+      console.error("Error fetching Gemini models:", error);
+      res.status(500).json({ error: error.message });
+    }
   } else {
-    // Return static model list for cloud providers
+    // Return static model list for other cloud providers
     res.json({ models: [] });
   }
 });
+
+// ===========================================
+// Helper Functions
+// ===========================================
+
+/**
+ * Fetch Gemini models via REST API
+ */
+async function handleGeminiModels(apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || `Failed to fetch models: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  return (data.models || [])
+    .filter(m => m.name.includes("gemini")) // Filter for Gemini models
+    .map(m => {
+      const id = m.name.replace("models/", "");
+      const isPro = id.includes("pro");
+      const isFlash = id.includes("flash");
+      
+      return {
+        id,
+        name: m.displayName || id,
+        provider: "gemini",
+        intelligence: isPro ? 95 : (isFlash ? 85 : 90),
+        speed: isFlash ? 100 : (isPro ? 80 : 90),
+        cost: isFlash ? 10 : (isPro ? 30 : 20), // Rough estimates relative to UI scale
+        contextWindow: m.inputTokenLimit ? `${Math.round(m.inputTokenLimit/1000)}k` : "Unknown",
+        description: m.description || "Google Gemini Model"
+      };
+    })
+    .sort((a, b) => b.id.localeCompare(a.id)); // Sort by ID descending (usually newer first)
+}
 
 module.exports = router;

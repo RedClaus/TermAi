@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Book, Settings, Search, Bug, LayoutGrid, Trash2, MessageSquare } from 'lucide-react';
+import { Terminal, Book, Settings, Search, Rocket, LayoutGrid, Trash2, MessageSquare, FileText, GraduationCap } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import clsx from 'clsx';
 import { SessionManager } from '../../services/SessionManager';
@@ -8,9 +8,11 @@ import { useState, useEffect } from 'react';
 
 interface SidebarProps {
     onOpenSettings?: () => void;
+    onOpenLogs?: () => void;
+    onOpenSkills?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onOpenLogs, onOpenSkills }) => {
     const [sessions, setSessions] = useState<SavedSession[]>([]);
 
     useEffect(() => {
@@ -39,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
         <div className={styles.sidebar}>
             <div className={styles.header}>
                 <div className={styles.logo}>
-                    <Bug size={18} className="text-accent-primary" />
+                    <Rocket size={18} className="text-accent-primary" />
                     <span>TermAI</span>
                 </div>
             </div>
@@ -75,6 +77,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
 
             <div className={styles.section}>
                 <div className={styles.sectionTitle}>Tools</div>
+                <div className={styles.item} onClick={onOpenSkills}>
+                    <GraduationCap className={styles.icon} />
+                    <span>Learned Skills</span>
+                </div>
                 <div className={styles.item}>
                     <Book className={styles.icon} />
                     <span>Notebooks</span>
@@ -86,6 +92,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             </div>
 
             <div style={{ marginTop: 'auto' }}>
+                <div className={styles.item} onClick={onOpenLogs}>
+                    <FileText className={styles.icon} />
+                    <span>Session Logs</span>
+                </div>
                 <div className={styles.item} onClick={onOpenSettings}>
                     <Settings className={styles.icon} />
                     <span>Settings</span>

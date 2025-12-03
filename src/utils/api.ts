@@ -11,8 +11,8 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ApiError extends Error {
-  status?: number;
-  code?: string;
+  status?: number | undefined;
+  code?: string | undefined;
 }
 
 /**
@@ -20,8 +20,8 @@ export interface ApiError extends Error {
  */
 function createApiError(
   message: string,
-  status?: number,
-  code?: string,
+  status?: number | undefined,
+  code?: string | undefined,
 ): ApiError {
   const error = new Error(message) as ApiError;
   error.status = status;
@@ -87,20 +87,22 @@ export const api = {
    * Make a POST request
    */
   async post<T, D = unknown>(path: string, data?: D): Promise<T> {
-    return baseFetch<T>(config.getApiUrl(path), {
-      method: "POST",
-      body: data ? JSON.stringify(data) : undefined,
-    });
+    const options: RequestInit = { method: "POST" };
+    if (data !== undefined) {
+      options.body = JSON.stringify(data);
+    }
+    return baseFetch<T>(config.getApiUrl(path), options);
   },
 
   /**
    * Make a PUT request
    */
   async put<T, D = unknown>(path: string, data?: D): Promise<T> {
-    return baseFetch<T>(config.getApiUrl(path), {
-      method: "PUT",
-      body: data ? JSON.stringify(data) : undefined,
-    });
+    const options: RequestInit = { method: "PUT" };
+    if (data !== undefined) {
+      options.body = JSON.stringify(data);
+    }
+    return baseFetch<T>(config.getApiUrl(path), options);
   },
 
   /**

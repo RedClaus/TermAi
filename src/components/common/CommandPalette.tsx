@@ -10,8 +10,8 @@ import {
   MessageSquare,
   Plus,
   Moon,
-  Sun,
   History,
+  GraduationCap,
 } from "lucide-react";
 import styles from "./CommandPalette.module.css";
 import {
@@ -101,6 +101,16 @@ const defaultCommands: Command[] = [
     category: "Sessions",
     action: () => {
       document.dispatchEvent(new CustomEvent("termai-show-history"));
+    },
+  },
+  {
+    id: "view-skills",
+    title: "View Learned Skills",
+    description: "See what the AI has learned",
+    icon: <GraduationCap size={16} />,
+    category: "AI",
+    action: () => {
+      document.dispatchEvent(new CustomEvent("termai-show-skills"));
     },
   },
 ];

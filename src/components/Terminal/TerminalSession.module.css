@@ -1,30 +1,102 @@
 .container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
-    background-color: var(--bg-primary);
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-primary);
+  overflow: hidden;
 }
 
+/* AI Input Box wrapper - persistent at top */
+.aiBoxWrapper {
+  flex-shrink: 0;
+  padding: 16px;
+  padding-bottom: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Resize handle */
+.resizeHandle {
+  flex-shrink: 0;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  color: var(--text-secondary);
+  opacity: 0.4;
+  transition: all 0.15s ease;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 255, 255, 0.02),
+    transparent
+  );
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.resizeHandle:hover {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(31, 111, 235, 0.1),
+    transparent
+  );
+  border-top-color: var(--border-color);
+  border-bottom-color: var(--border-color);
+}
+
+.resizeHandle.resizing {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.15);
+}
+
+/* Terminal scroll area */
 .scrollArea {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    padding-bottom: 0;
-    scroll-behavior: smooth;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  padding-bottom: 0;
+  scroll-behavior: smooth;
+}
+
+/* Empty state message */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.emptyStateIcon {
+  opacity: 0.3;
+  margin-bottom: 16px;
+}
+
+.emptyStateText {
+  font-size: 14px;
+  max-width: 300px;
 }
 
 .welcomeMessage {
-    margin-bottom: 20px;
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 1.6;
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .welcomeTitle {
-    font-size: 24px;
-    font-weight: bold;
-    color: var(--text-primary);
-    margin-bottom: 8px;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--text-primary);
+  margin-bottom: 8px;
 }

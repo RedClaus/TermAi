@@ -1,133 +1,265 @@
 .container {
-    position: relative;
+  position: relative;
 }
 
 .trigger {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-family: var(--font-sans);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background-color 0.2s ease;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  max-width: 200px;
 }
 
 .trigger:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border-color: var(--accent-primary);
 }
 
+.triggerText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triggerIconOpen {
+  transform: rotate(180deg);
+}
+
+/* Dropdown container */
 .dropdown {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    margin-bottom: 8px;
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: var(--shadow-lg);
-    width: 240px;
-    max-height: 300px;
-    overflow-y: auto;
-    z-index: 1000;
-    padding: 4px;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 8px;
 }
 
-.option {
-    padding: 8px 12px;
-    font-size: 12px;
-    color: var(--text-primary);
-    cursor: pointer;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+.dropdownHeader {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
 }
 
-.option:hover {
-    background-color: var(--bg-tertiary);
+/* Provider Group */
+.providerGroup {
+  margin-bottom: 4px;
 }
 
-.option.selected {
-    background-color: var(--accent-primary);
-    color: white;
+.providerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
 }
 
-/* Specs Card */
+.providerHeader:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.providerHeader.expanded {
+  background-color: var(--bg-tertiary);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.providerHeader.hasSelected {
+  border-left: 3px solid var(--accent-primary);
+}
+
+.providerInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.providerName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.providerMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelCount {
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.expandIcon {
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.expandIcon.rotated {
+  transform: rotate(90deg);
+}
+
+/* Model Submenu */
+.modelSubmenu {
+  background: var(--bg-tertiary);
+  border-radius: 0 0 8px 8px;
+  padding: 4px;
+  margin-top: -2px;
+  margin-bottom: 4px;
+}
+
+.modelOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.modelOption:hover {
+  background-color: var(--bg-secondary);
+}
+
+.modelOption.selected {
+  background-color: var(--accent-primary);
+  color: white;
+}
+
+.modelName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Specs Card - appears on model hover */
 .specsCard {
-    position: absolute;
-    left: 100%;
-    bottom: 0;
-    margin-left: 8px;
-    width: 280px;
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: var(--shadow-lg);
-    z-index: 1001;
+  position: absolute;
+  left: calc(100% + 8px);
+  bottom: 0;
+  width: 260px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1001;
 }
 
 .specsHeader {
-    margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .specsTitle {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .specsDesc {
-    font-size: 11px;
-    color: var(--text-secondary);
-    line-height: 1.4;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 .specRow {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 12px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 12px;
 }
 
 .specLabel {
-    width: 80px;
-    color: var(--text-secondary);
+  width: 85px;
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
 .specBarContainer {
-    flex: 1;
-    height: 6px;
-    background-color: var(--bg-tertiary);
-    border-radius: 3px;
-    overflow: hidden;
+  flex: 1;
+  height: 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
 .specBar {
-    height: 100%;
-    background-color: var(--text-secondary);
-    border-radius: 3px;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 
+/* Intelligence bar - blue/purple */
 .specRow:nth-child(1) .specBar {
-    background-color: var(--accent-primary);
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary, #818cf8));
 }
 
-/* Intelligence */
+/* Speed bar - green */
 .specRow:nth-child(2) .specBar {
-    background-color: var(--success);
+  background: linear-gradient(90deg, #22c55e, #4ade80);
 }
 
-/* Speed */
+/* Cost bar - orange/yellow */
 .specRow:nth-child(3) .specBar {
-    background-color: var(--warning);
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
 
-/* Cost */
+.contextInfo {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Scrollbar styling for dropdown */
+.dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.dropdown::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

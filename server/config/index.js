@@ -18,7 +18,7 @@ const config = {
   // Rate limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "1000", 10),
   },
 
   // File system sandbox

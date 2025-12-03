@@ -8,14 +8,14 @@ import styles from "./Markdown.module.css";
 
 interface MarkdownProps {
   content: string;
-  onCodeRun?: (code: string) => void;
+  onCodeRun?: ((code: string) => void) | undefined;
 }
 
 interface ParsedBlock {
   type: "text" | "code" | "heading" | "list" | "blockquote";
   content: string;
-  language?: string;
-  level?: number;
+  language?: string | undefined;
+  level?: number | undefined;
 }
 
 /**
@@ -197,7 +197,7 @@ function parseInline(text: string): React.ReactNode[] {
  */
 const MarkdownBlock = memo<{
   block: ParsedBlock;
-  onCodeRun?: (code: string) => void;
+  onCodeRun?: ((code: string) => void) | undefined;
 }>(({ block, onCodeRun }) => {
   switch (block.type) {
     case "code":
@@ -212,11 +212,12 @@ const MarkdownBlock = memo<{
       );
 
     case "heading": {
-      const Tag = `h${block.level}` as keyof JSX.IntrinsicElements;
-      return (
-        <Tag className={styles[`h${block.level}`]}>
-          {parseInline(block.content)}
-        </Tag>
+      const level = block.level ?? 1;
+      const HeadingTag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+      return React.createElement(
+        HeadingTag,
+        { className: styles[`h${level}`] },
+        parseInline(block.content),
       );
     }
 

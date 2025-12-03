@@ -1,0 +1,287 @@
+/* Task Completion Summary Styles */
+
+.container {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 2px solid var(--border-color);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Status-based styling */
+.statusSuccess {
+  border-color: #22c55e;
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.1),
+    var(--bg-secondary)
+  );
+}
+
+.statusWarning {
+  border-color: #f59e0b;
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.1),
+    var(--bg-secondary)
+  );
+}
+
+.statusError {
+  border-color: #ef4444;
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.1),
+    var(--bg-secondary)
+  );
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.overallEmoji {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.headerText {
+  flex: 1;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.duration {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dismissBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.dismissBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Stats */
+.stats {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.stat {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.statEmoji {
+  font-size: 20px;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Steps Section */
+.stepsSection {
+  margin-bottom: 16px;
+}
+
+.stepsTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+}
+
+.narrativeSection {
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 12px;
+  border-radius: 6px;
+}
+
+.narrativeContent {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.stepSuccess {
+  border-left: 3px solid #22c55e;
+}
+
+.stepFailed {
+  border-left: 3px solid #ef4444;
+}
+
+.stepEmoji {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+
+.stepSuccess .stepEmoji {
+  color: #22c55e;
+}
+
+.stepFailed .stepEmoji {
+  color: #ef4444;
+}
+
+.stepCommand {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepCode {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.moreSteps {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 4px;
+}
+
+/* Final Message */
+.finalMessage {
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  border-left: 3px solid var(--accent-primary);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.actions button,
+.actions a {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.openBtn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+}
+
+.openBtn:hover {
+  opacity: 0.9;
+}
+
+.retryBtn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.retryBtn:hover {
+  background: var(--bg-primary);
+}
+
+.doneBtn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.doneBtn:hover {
+  background: var(--bg-primary);
+}

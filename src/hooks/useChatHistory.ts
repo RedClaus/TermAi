@@ -3,7 +3,7 @@
  * Manages chat message history with localStorage persistence
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Message } from "../types";
+import type { Message } from "../types";
 
 const DEFAULT_WELCOME_MESSAGE: Message = {
   role: "ai",
@@ -12,8 +12,8 @@ const DEFAULT_WELCOME_MESSAGE: Message = {
 };
 
 interface UseChatHistoryConfig {
-  sessionId?: string;
-  storageKeyPrefix?: string;
+  sessionId?: string | undefined;
+  storageKeyPrefix?: string | undefined;
 }
 
 interface UseChatHistoryReturn {
@@ -25,7 +25,7 @@ interface UseChatHistoryReturn {
   resetToWelcome: (customMessage?: string) => void;
   getHistoryKey: () => string;
   scrollToBottom: () => void;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function useChatHistory(

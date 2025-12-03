@@ -1,15 +1,19 @@
 /**
  * useAutoRun Hook
  * Manages auto-run mode state and command execution loop
+ * Includes stuck detection and user intervention requests
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LLMManager } from "../services/LLMManager";
 import { FileSystemService } from "../services/FileSystemService";
 import { buildSystemPrompt } from "../utils/promptBuilder";
-import { Message, PendingSafetyCommand } from "../types";
+import type { Message, PendingSafetyCommand } from "../types";
 import { emit } from "../events";
 
 const MAX_AUTO_STEPS = 10;
+const MAX_CONSECUTIVE_FAILURES = 3;
+const MAX_SIMILAR_COMMANDS = 3;
+const STUCK_DETECTION_WINDOW = 5; // Look at last N commands
 
 interface AutoRunConfig {
   sessionId?: string;
@@ -23,11 +27,27 @@ interface AutoRunConfig {
   getCommandImpact: (cmd: string) => string | null;
 }
 
+interface CommandHistory {
+  command: string;
+  exitCode: number;
+  timestamp: number;
+  errorPattern?: string | undefined;
+}
+
+interface StuckDetectionResult {
+  isStuck: boolean;
+  reason: string;
+  suggestions: string[];
+  failedCommands: string[];
+}
+
 interface AutoRunState {
   isAutoRun: boolean;
   autoRunCount: number;
   isLoading: boolean;
   runningCommandId: string | null;
+  isStuck: boolean;
+  stuckReason: string | null;
 }
 
 interface AutoRunActions {
@@ -46,6 +66,179 @@ interface AutoRunActions {
     sessionId?: string;
   }) => void;
   processAIResponse: (response: string) => Promise<void>;
+  clearStuckState: () => void;
+}
+
+/**
+ * Extract error pattern from command output
+ */
+function extractErrorPattern(output: string): string | undefined {
+  const patterns = [
+    /Address already in use/i,
+    /EADDRINUSE/i,
+    /Permission denied/i,
+    /command not found/i,
+    /No such file or directory/i,
+    /Connection refused/i,
+    /timeout/i,
+    /ModuleNotFoundError/i,
+    /ImportError/i,
+    /SyntaxError/i,
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.test(output)) {
+      return pattern.source;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Detect if the AI is stuck in a loop
+ */
+function detectStuckState(history: CommandHistory[]): StuckDetectionResult {
+  const recent = history.slice(-STUCK_DETECTION_WINDOW);
+
+  if (recent.length < 2) {
+    return { isStuck: false, reason: "", suggestions: [], failedCommands: [] };
+  }
+
+  // Check for consecutive failures
+  const consecutiveFailures = recent.filter((h) => h.exitCode !== 0);
+  if (consecutiveFailures.length >= MAX_CONSECUTIVE_FAILURES) {
+    const failedCommands = consecutiveFailures.map((h) => h.command);
+    const errorPatterns = [
+      ...new Set(
+        consecutiveFailures.map((h) => h.errorPattern).filter(Boolean),
+      ),
+    ];
+
+    return {
+      isStuck: true,
+      reason: `${consecutiveFailures.length} consecutive command failures detected`,
+      suggestions: generateSuggestions(
+        errorPatterns as string[],
+        failedCommands,
+      ),
+      failedCommands,
+    };
+  }
+
+  // Check for repeated similar commands
+  const commandGroups = new Map<string, string[]>();
+  for (const h of recent) {
+    const base = h.command.trim().split(/\s+/)[0];
+    const existing = commandGroups.get(base) || [];
+    existing.push(h.command);
+    commandGroups.set(base, existing);
+  }
+
+  for (const [base, commands] of commandGroups) {
+    if (commands.length >= MAX_SIMILAR_COMMANDS) {
+      return {
+        isStuck: true,
+        reason: `Repeated attempts with similar "${base}" commands`,
+        suggestions: [
+          "Try a completely different approach",
+          "Check if prerequisites are missing",
+          "Verify the environment is correctly set up",
+        ],
+        failedCommands: commands,
+      };
+    }
+  }
+
+  // Check for same error pattern recurring
+  const errorPatterns = recent.map((h) => h.errorPattern).filter(Boolean);
+  const patternCounts = new Map<string, number>();
+  for (const pattern of errorPatterns) {
+    patternCounts.set(pattern!, (patternCounts.get(pattern!) || 0) + 1);
+  }
+
+  for (const [pattern, count] of patternCounts) {
+    if (count >= MAX_CONSECUTIVE_FAILURES) {
+      return {
+        isStuck: true,
+        reason: `Same error "${pattern}" occurring repeatedly`,
+        suggestions: generateSuggestions(
+          [pattern],
+          recent.map((h) => h.command),
+        ),
+        failedCommands: recent
+          .filter((h) => h.errorPattern === pattern)
+          .map((h) => h.command),
+      };
+    }
+  }
+
+  return { isStuck: false, reason: "", suggestions: [], failedCommands: [] };
+}
+
+/**
+ * Generate helpful suggestions based on error patterns
+ */
+function generateSuggestions(
+  errorPatterns: string[],
+  _failedCommands: string[],
+): string[] {
+  const suggestions: string[] = [];
+
+  for (const pattern of errorPatterns) {
+    if (/address.*in.*use|EADDRINUSE/i.test(pattern)) {
+      suggestions.push(
+        "A process is blocking the port. Would you like me to find and kill it?",
+      );
+      suggestions.push("Should I try a different port number?");
+    }
+    if (/permission.*denied/i.test(pattern)) {
+      suggestions.push(
+        "This requires elevated permissions. Should I use sudo?",
+      );
+      suggestions.push(
+        "Check if the file/directory permissions need to be changed",
+      );
+    }
+    if (/command.*not.*found/i.test(pattern)) {
+      suggestions.push(
+        "The required tool may not be installed. Should I install it?",
+      );
+      suggestions.push("Check if the tool is in your PATH");
+    }
+    if (/module.*not.*found|import.*error/i.test(pattern)) {
+      suggestions.push(
+        "Missing Python dependency. Should I install it with pip?",
+      );
+      suggestions.push("Are you in the correct virtual environment?");
+    }
+    if (/no.*such.*file/i.test(pattern)) {
+      suggestions.push(
+        "The file or directory doesn't exist. Should I create it?",
+      );
+      suggestions.push("Verify the path is correct");
+    }
+    if (/connection.*refused/i.test(pattern)) {
+      suggestions.push("The service might not be running. Should I start it?");
+      suggestions.push("Check if the service is configured correctly");
+    }
+    if (/timeout/i.test(pattern)) {
+      suggestions.push(
+        "The operation timed out. Should I try with a longer timeout?",
+      );
+      suggestions.push("The service might be overloaded or unresponsive");
+    }
+  }
+
+  // Default suggestions if no specific patterns matched
+  if (suggestions.length === 0) {
+    suggestions.push("Would you like to try a different approach?");
+    suggestions.push(
+      "Can you provide more context about what you're trying to achieve?",
+    );
+    suggestions.push("Should I investigate the environment setup?");
+  }
+
+  return [...new Set(suggestions)]; // Remove duplicates
 }
 
 export function useAutoRun(
@@ -67,19 +260,32 @@ export function useAutoRun(
   const [autoRunCount, setAutoRunCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [runningCommandId, setRunningCommandId] = useState<string | null>(null);
+  const [isStuck, setIsStuck] = useState(false);
+  const [stuckReason, setStuckReason] = useState<string | null>(null);
+
+  // Track command history for stuck detection
+  const commandHistoryRef = useRef<CommandHistory[]>([]);
 
   // Use ref to track latest messages to avoid stale closure issues
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  const clearStuckState = useCallback(() => {
+    setIsStuck(false);
+    setStuckReason(null);
+    commandHistoryRef.current = [];
+  }, []);
+
   const toggleAutoRun = useCallback(() => {
     setIsAutoRun((prev) => !prev);
     setAutoRunCount(0);
-  }, []);
+    clearStuckState();
+  }, [clearStuckState]);
 
   const resetAutoRunCount = useCallback(() => {
     setAutoRunCount(0);
-  }, []);
+    clearStuckState();
+  }, [clearStuckState]);
 
   const executeToolCommand = useCallback(
     async (
@@ -139,9 +345,58 @@ export function useAutoRun(
     [onStatusChange],
   );
 
+  const requestUserInput = useCallback(
+    (stuckResult: StuckDetectionResult) => {
+      setIsStuck(true);
+      setStuckReason(stuckResult.reason);
+
+      const userInputRequest = `
+🛑 **I Need Your Help**
+
+I've been trying to complete this task but I'm running into repeated issues.
+
+**Problem:** ${stuckResult.reason}
+
+**Failed Commands:**
+${stuckResult.failedCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
+
+**Possible Solutions:**
+${stuckResult.suggestions.map((s, i) => `${i + 1}. ${s}`).join("\n")}
+
+**Please help me by:**
+- Telling me which approach to try
+- Providing additional context about your setup
+- Or manually running a command to fix the issue
+
+Once you respond, I'll continue with your guidance.
+`;
+
+      onMessagesUpdate((prev) => [
+        ...prev,
+        { role: "ai", content: userInputRequest },
+      ]);
+
+      onStatusChange("Waiting for your input...");
+      setIsLoading(false);
+    },
+    [onMessagesUpdate, onStatusChange],
+  );
+
   const processAIResponse = useCallback(
     async (response: string) => {
       if (!isAutoRun) return;
+
+      // Check for [WAIT] or [ASK_USER] signals from AI
+      if (
+        response.includes("[WAIT]") ||
+        response.includes("[ASK_USER]") ||
+        response.includes("[NEED_HELP]")
+      ) {
+        setIsStuck(true);
+        setStuckReason("AI requested user input");
+        onStatusChange("Waiting for your input...");
+        return;
+      }
 
       // --- Tool Execution Logic ---
       const toolRegex = /\[(READ_FILE|WRITE_FILE|LIST_FILES|MKDIR): (.*?)\]/g;
@@ -194,6 +449,7 @@ export function useAutoRun(
       // Check for task completion
       if (response.toLowerCase().includes("task complete")) {
         setAutoRunCount(0);
+        clearStuckState();
         onStatusChange(null);
       } else {
         // Stall detection
@@ -210,7 +466,7 @@ export function useAutoRun(
 
       // Check for special commands
       if (response.includes("[NEW_TAB]")) {
-        emit("termai-new-tab", undefined);
+        emit("termai-new-tab");
         onStatusChange("Opening new tab...");
       }
 
@@ -232,6 +488,7 @@ export function useAutoRun(
       onMessagesUpdate,
       executeToolCommand,
       runningCommandId,
+      clearStuckState,
     ],
   );
 
@@ -247,12 +504,44 @@ export function useAutoRun(
       const { command, output, exitCode } = data;
       setRunningCommandId(null);
 
+      // Track command in history for stuck detection
+      const errorPattern =
+        exitCode !== 0 ? extractErrorPattern(output) : undefined;
+      commandHistoryRef.current.push({
+        command,
+        exitCode,
+        timestamp: Date.now(),
+        errorPattern,
+      });
+
+      // Keep only recent history
+      if (commandHistoryRef.current.length > 10) {
+        commandHistoryRef.current = commandHistoryRef.current.slice(-10);
+      }
+
+      // Check for stuck state
+      const stuckResult = detectStuckState(commandHistoryRef.current);
+      if (stuckResult.isStuck) {
+        requestUserInput(stuckResult);
+        return;
+      }
+
       // Add system output to chat
       let outputMsg = `> Executed: \`${command}\` (Exit: ${exitCode})\n\nOutput:\n\`\`\`\n${output.substring(0, 1000)}${output.length > 1000 ? "..." : ""}\n\`\`\``;
 
       // Intelligent Backtracking Trigger
       if (isAutoRun && exitCode !== 0) {
-        outputMsg += `\n\nCommand Failed (Exit Code: ${exitCode}).\n\nAUTO-RECOVERY INITIATED:\n1. Review your last plan.\n2. Identify which step failed.\n3. Backtrack to the state before this step.\n4. Propose a DIFFERENT command to achieve the same goal. Do NOT repeat the failed command.`;
+        outputMsg += `\n\n⚠️ **Command Failed (Exit Code: ${exitCode})**\n\n`;
+
+        if (errorPattern) {
+          outputMsg += `**Error Type:** ${errorPattern}\n\n`;
+        }
+
+        outputMsg += `**AUTO-RECOVERY PROTOCOL:**
+1. Analyze why this command failed
+2. Check if prerequisites are missing
+3. If this is a recurring error, use [ASK_USER] to request help
+4. Propose a DIFFERENT approach - do NOT repeat similar failed commands`;
       }
 
       onMessagesUpdate((prev) => [
@@ -273,6 +562,7 @@ export function useAutoRun(
         ]);
         setIsAutoRun(false);
         setAutoRunCount(0);
+        clearStuckState();
         return;
       }
 
@@ -296,7 +586,7 @@ export function useAutoRun(
         const systemPrompt = buildSystemPrompt({
           cwd: currentCwd,
           isAutoRun,
-          os: "macOS",
+          os: "Linux", // TODO: detect actual OS
         });
 
         const response = await llm.chat(systemPrompt, context);
@@ -306,7 +596,7 @@ export function useAutoRun(
           { role: "ai", content: response },
         ]);
         await processAIResponse(response);
-      } catch (error) {
+      } catch {
         onMessagesUpdate((prev) => [
           ...prev,
           { role: "ai", content: "Error in auto-run loop." },
@@ -326,6 +616,8 @@ export function useAutoRun(
       onMessagesUpdate,
       onStatusChange,
       processAIResponse,
+      requestUserInput,
+      clearStuckState,
     ],
   );
 
@@ -333,87 +625,39 @@ export function useAutoRun(
     (data: { commandId: string; command: string; sessionId?: string }) => {
       if (data.sessionId !== sessionId) return;
       setRunningCommandId(data.commandId);
+      // Clear stuck state when user manually runs a command
+      if (isStuck) {
+        clearStuckState();
+      }
     },
-    [sessionId],
+    [sessionId, isStuck, clearStuckState],
   );
 
-  // Loop Prevention: Check if the last AI message is identical to the one before the last system message
+  // Reset stuck state when user sends a new message
   useEffect(() => {
-    if (isAutoRun && messages.length > 4) {
-      const lastAiMsg = messages[messages.length - 1];
-      const prevAiMsg = messages[messages.length - 3]; // AI -> System -> AI
-      if (
-        lastAiMsg.role === "ai" &&
-        prevAiMsg?.role === "ai" &&
-        lastAiMsg.content === prevAiMsg.content
-      ) {
-        onMessagesUpdate((prev) => [
-          ...prev,
-          {
-            role: "system",
-            content:
-              "Loop Detected: You are repeating the same command/response. Auto-Run stopped.",
-          },
-        ]);
-        setIsAutoRun(false);
-        onStatusChange("Loop detected. Stopped.");
-      }
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === "user" && isStuck) {
+      clearStuckState();
     }
-  }, [messages, isAutoRun, onMessagesUpdate, onStatusChange]);
+  }, [messages, isStuck, clearStuckState]);
 
-  // Event listeners for command events
-  useEffect(() => {
-    const handleFinished = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        command: string;
-        output: string;
-        exitCode: number;
-        sessionId?: string;
-      }>;
-      handleCommandFinished(customEvent.detail);
-    };
-
-    const handleStarted = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        commandId: string;
-        command: string;
-        sessionId?: string;
-      }>;
-      handleCommandStarted(customEvent.detail);
-    };
-
-    const handleAutoContinue = () => {
-      if (isAutoRun) {
-        emit("termai-auto-continue");
-      }
-    };
-
-    window.addEventListener("termai-command-finished", handleFinished);
-    window.addEventListener("termai-command-started", handleStarted);
-    window.addEventListener("termai-auto-continue", handleAutoContinue);
-
-    return () => {
-      window.removeEventListener("termai-command-finished", handleFinished);
-      window.removeEventListener("termai-command-started", handleStarted);
-      window.removeEventListener("termai-auto-continue", handleAutoContinue);
-    };
-  }, [handleCommandFinished, handleCommandStarted, isAutoRun]);
-
-  const state: AutoRunState = {
-    isAutoRun,
-    autoRunCount,
-    isLoading,
-    runningCommandId,
-  };
-
-  const actions: AutoRunActions = {
-    toggleAutoRun,
-    setIsAutoRun,
-    resetAutoRunCount,
-    handleCommandFinished,
-    handleCommandStarted,
-    processAIResponse,
-  };
-
-  return [state, actions];
+  return [
+    {
+      isAutoRun,
+      autoRunCount,
+      isLoading,
+      runningCommandId,
+      isStuck,
+      stuckReason,
+    },
+    {
+      toggleAutoRun,
+      setIsAutoRun,
+      resetAutoRunCount,
+      handleCommandFinished,
+      handleCommandStarted,
+      processAIResponse,
+      clearStuckState,
+    },
+  ];
 }
