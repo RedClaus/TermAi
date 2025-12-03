@@ -4,230 +4,261 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**TermAI** is an AI-powered terminal assistant built with React + TypeScript that bridges natural language and command-line operations. It features a modern UI with block-based output, multi-AI provider support (Gemini, OpenAI, Claude, Ollama), smart error recovery, and session management.
+**TermAI** is an AI-powered terminal assistant built with React + TypeScript frontend and Node.js/Express backend. It bridges natural language and command-line operations with features including:
+
+- Multi-AI provider support (Gemini, OpenAI, Claude, Ollama, OpenRouter)
+- Skill learning system that remembers successful command patterns
+- Auto-run mode for autonomous command execution
+- Block-based terminal output with modern UI
+- Interactive PTY support for SSH and other real-time commands
+- Docker deployment support
 
 ## Architecture
 
 ### Client-Server Model
 
-The application consists of two main parts:
-
-1. **Frontend** (React + Vite): UI and AI interaction logic
-   - Port: `5173` (dev server)
-   - Entry point: `src/main.tsx`
-
-2. **Backend** (Node.js/Express): Command execution and file system operations
-   - Port: `3001`
-   - Entry point: `server/index.js`
-   - **Must be running** for the application to work
+```
+Frontend (React + Vite)          Backend (Express + Socket.IO)
+     Port: 5173                         Port: 3001
+         │                                   │
+         ├── REST API ──────────────────────►├── /api/execute (commands)
+         ├── REST API ──────────────────────►├── /api/llm/* (AI proxy)
+         ├── REST API ──────────────────────►├── /api/knowledge/* (skills)
+         ├── REST API ──────────────────────►├── /api/fs/* (file ops)
+         └── WebSocket ─────────────────────►└── Socket.IO (PTY sessions)
+```
 
 ### Key Components
 
-- **AIPanel** (`src/components/AI/AIPanel.tsx`): Main AI interaction component that handles command generation, error recovery, and auto-run modes. Uses custom events for cross-component communication.
+#### Frontend (`src/`)
 
-- **TerminalSession** (`src/components/Terminal/TerminalSession.tsx`): Manages terminal state, command blocks, and working directory (cwd). Handles both standard and interactive (SSH) commands.
+| Component | Path | Description |
+|-----------|------|-------------|
+| **AIInputBox** | `components/Terminal/AIInputBox.tsx` | Embedded AI chat in terminal view, handles auto-run, skill learning triggers |
+| **AIPanel** | `components/AI/AIPanel.tsx` | Standalone AI panel (alternative to AIInputBox) |
+| **TerminalSession** | `components/Terminal/TerminalSession.tsx` | Terminal state, command blocks, working directory |
+| **TerminalTabs** | `components/Terminal/TerminalTabs.tsx` | Multi-tab management, session persistence |
+| **Workspace** | `components/Workspace/Workspace.tsx` | Layout container, resizable panels |
+| **SystemOverseer** | `components/Workspace/SystemOverseer.tsx` | Watchdog for stalled commands/AI |
 
-- **SystemOverseer** (`src/components/Workspace/SystemOverseer.tsx`): Watchdog component that monitors command execution and AI thinking time. Auto-intervenes when commands stall (>30s with no output) or AI hangs (>45s).
+#### Services (`src/services/`)
 
-- **LLMManager** (`src/services/LLMManager.ts`): Provider abstraction layer for AI models. Each provider (Gemini/OpenAI/Anthropic/Ollama) implements the `LLMProvider` interface with a `chat()` method.
+| Service | Description |
+|---------|-------------|
+| **LLMManager** | AI provider abstraction with caching to prevent request spam |
+| **KnowledgeService** | API client for skill learning storage |
+| **SessionManager** | Tab/session persistence to localStorage |
+| **FileSystemService** | Client-side file operations API |
+| **SessionLogService** | Conversation logging |
 
-- **FileSystemService** (`src/services/FileSystemService.ts`): Client-side API for agentic file operations (read/write/list/mkdir) that communicate with backend endpoints.
+#### Hooks (`src/hooks/`)
 
-### Backend Capabilities
+| Hook | Description |
+|------|-------------|
+| **useAutoRun** | Auto-run mode logic, command execution |
+| **useObserver** | Skill learning observer, triggers after successful tasks |
+| **useSafetyCheck** | Dangerous command detection and confirmation |
+| **useChatHistory** | Message history management |
+| **useTermAiEvent** | Typed event subscription helper |
 
-The Express server (`server/index.js`) provides:
+#### Backend (`server/`)
 
-- **REST API** (`/api/execute`, `/api/cancel`): Command execution with working directory tracking, including special handling for `cd` commands
-- **File System API** (`/api/fs/*`): Read, write, list, and mkdir operations for AI agents
-- **Ollama Proxy** (`/api/proxy/ollama/*`): CORS-safe proxy for local Ollama instances
-- **WebSocket/PTY** (via Socket.IO): Interactive terminal sessions for SSH and other real-time commands using `node-pty`
+| Route | Description |
+|-------|-------------|
+| `/api/execute` | Command execution with cwd tracking |
+| `/api/llm/chat` | Proxied AI chat (keys stored server-side) |
+| `/api/llm/has-key` | Check if API key configured (cached) |
+| `/api/llm/set-key` | Store API key on server |
+| `/api/knowledge/skills` | CRUD for learned skills |
+| `/api/fs/*` | File system operations |
+| Socket.IO | Interactive PTY sessions |
 
 ### Event System
 
-Components communicate via custom browser events (all prefixed with `termai-`):
+Components communicate via custom browser events prefixed with `termai-`:
 
-- `termai-command-started`: Fired when command execution begins
-- `termai-command-output`: Fired during command output streaming
-- `termai-command-finished`: Fired when command completes
-- `termai-ai-thinking`: Fired when AI starts/stops processing
-- `termai-cancel-command`: Request to cancel a running command
-- `termai-run-command`: Request to execute a command
-- `termai-cwd-changed`: Working directory changed
+```typescript
+// Defined in src/events/types.ts
+interface TermAiEvents {
+  'termai-run-command': { command: string; sessionId?: string };
+  'termai-command-started': { command: string; blockId: string; sessionId?: string };
+  'termai-command-output': { output: string; blockId: string; sessionId?: string };
+  'termai-command-finished': { exitCode: number; blockId: string; output: string; sessionId?: string };
+  'termai-ai-thinking': { isThinking: boolean; sessionId?: string };
+  'termai-cwd-changed': { cwd: string; sessionId?: string };
+  'termai-settings-changed': {};
+  'termai-cancel-command': { sessionId?: string };
+}
+```
 
-Events are scoped by `sessionId` to support multiple terminal sessions.
+Events are scoped by `sessionId` to support multiple terminal tabs.
 
-### System Prompt Architecture
+### Skill Learning System
 
-The AI assistant behavior is defined in `src/data/advancedSystemPrompt.ts` (ADVANCED_SYSTEM_PROMPT), which includes:
+1. User completes a multi-step task with AI assistance
+2. `useObserver` hook detects task completion (reason="complete" or successfulSteps > 0)
+3. Observer sends conversation to LLM for analysis
+4. LLM extracts: task description, command pattern, success criteria
+5. Skill saved via `/api/knowledge/skills` endpoint
+6. Future similar requests can reference learned skills
 
-- Cross-platform command knowledge (macOS/Windows/Linux)
-- Shell-specific syntax (bash/zsh/fish/PowerShell/CMD)
-- Safety constraints for destructive operations
-- Tool definitions for agentic operations (READ_FILE, WRITE_FILE, LIST_FILES, MKDIR)
-- Error handling patterns
-- Domain-specific knowledge (git, docker, kubernetes, ssh)
+Manual trigger: Sparkles button in AIInputBox toolbar.
 
-The prompt is dynamically built in `src/utils/promptBuilder.ts` with context about OS, shell, working directory, and recent command history.
+### API Key Management
+
+API keys are stored **server-side only** for security:
+
+1. User enters key in Settings modal
+2. Key sent to `/api/llm/set-key` → stored in server memory/env
+3. Frontend calls `LLMManager.hasApiKey()` → checks via `/api/llm/has-key`
+4. All AI requests proxied through backend with stored key
+
+Caching in `LLMManager` prevents request spam:
+- 30-second TTL cache for `hasApiKey()` results
+- Request deduplication for concurrent calls
 
 ## Development Commands
 
-### Setup
-
 ```bash
-# Install dependencies
-npm install
+# Install all dependencies
+npm run install:all
 
-# Install server dependencies
-cd server && npm install && cd ..
-```
+# Run frontend + backend together
+npm run dev:all
 
-### Running the Application
-
-**You must run both frontend and backend simultaneously:**
-
-```bash
-# Terminal 1: Start backend server (port 3001)
-cd server
-node index.js
-
-# Terminal 2: Start frontend dev server (port 5173)
+# Frontend only (port 5173)
 npm run dev
-```
 
-Then open `http://localhost:5173` in your browser.
+# Backend only (port 3001)
+npm run dev:server
 
-### Build and Lint
-
-```bash
-# Type-check and build for production
+# Build for production
 npm run build
 
-# Lint the codebase
+# Lint
 npm run lint
-
-# Preview production build
-npm run preview
 ```
 
-## Code Style and Patterns
+## Code Patterns
 
 ### State Management
 
-- React hooks (`useState`, `useEffect`, `useRef`) for local state
+- React hooks for local state
 - Custom events for cross-component communication
-- LocalStorage for session persistence (API keys, session history, cwd)
+- localStorage for session persistence
 
-### Working with AI Providers
+### TypeScript Conventions
 
-When adding or modifying AI providers:
+```typescript
+// Type-only imports (required by verbatimModuleSyntax)
+import type { SomeType } from './types';
 
-1. Implement the `LLMProvider` interface in `src/services/LLMManager.ts`
-2. Add model metadata to `src/data/models.ts`
-3. Handle API key validation and browser safety flags (`dangerouslyAllowBrowser` for client-side SDKs)
-4. For Ollama: support both direct connection and proxy fallback
+// Named imports preferred
+import { useState, useEffect } from 'react';
 
-### Command Execution Flow
+// Interfaces in src/types.ts
+interface CommandBlock {
+  id: string;
+  command: string;
+  output: string;
+  exitCode?: number;
+}
+```
 
-1. User types command or AI generates one → `AIPanel` or `InputArea`
-2. Event dispatched → `termai-run-command`
-3. `TerminalSession` creates pending block → dispatches `termai-command-started`
-4. Command sent to backend → `/api/execute`
-5. Backend executes via `child_process.exec` or PTY
-6. Output streamed back → block updated → `termai-command-output`
-7. Command completes → `termai-command-finished`
-8. `SystemOverseer` monitors throughout for stalls
+### Adding New AI Providers
 
-### Interactive Commands (SSH)
-
-SSH and other interactive commands use WebSocket + PTY:
-
-1. Detected by `command.trim().startsWith('ssh')`
-2. `InteractiveBlock` component renders xterm.js terminal
-3. Socket.IO connection established to backend
-4. Backend spawns PTY process via `node-pty`
-5. Bidirectional streaming between xterm and PTY
-
-## Project-Specific Notes
-
-### API Keys and Configuration
-
-- API keys stored in LocalStorage (keys: `termai_gemini_key`, `termai_openai_key`, `termai_anthropic_key`)
-- Ollama endpoint configurable in settings (default: `http://localhost:11434`)
-- No `.env` file needed for frontend (all client-side)
-
-### Session Management
-
-- Sessions stored in LocalStorage under `termai_sessions`
-- Each session tracks: id, name, messages, timestamp
-- Working directory tracked per-session: `termai_cwd_${sessionId}`
-
-### Error Recovery
-
-The AI assistant has auto-retry capability:
-
-1. Command fails (exitCode !== 0)
-2. Error output captured
-3. AI prompted with error context
-4. AI suggests fix or alternative command
-5. User approves or rejects fix
-
-Safety limits prevent infinite retry loops.
-
-### Testing Notes
-
-- No test framework currently configured
-- Manual testing workflow:
-  1. Start both servers
-  2. Test command execution (try: `ls`, `pwd`, `cd ~`)
-  3. Test AI generation (describe what you want)
-  4. Test error recovery (run invalid command)
-  5. Test SSH/interactive mode
-  6. Test file operations via AI tools
-
-## Dependencies
-
-### Runtime
-
-- `react` + `react-dom`: UI framework
-- `@anthropic-ai/sdk`, `@google/generative-ai`, `openai`: AI provider SDKs
-- `xterm` + `xterm-addon-fit`: Terminal emulator for SSH
-- `socket.io-client`: WebSocket client for PTY
-- `lucide-react`: Icon library
-- `framer-motion`: Animations
-- `uuid`: Unique ID generation
-
-### Backend (server/)
-
-- `express`: HTTP server
-- `socket.io`: WebSocket server
-- `node-pty`: Pseudo-terminal for interactive sessions
-- `cors`: CORS middleware
-
-## Common Tasks
-
-### Adding a New AI Model
-
-1. Add model definition to `src/data/models.ts`:
+1. Add model definitions to `src/data/models.ts`:
    ```typescript
-   { id: 'provider-model-name', name: 'Display Name', provider: 'provider' }
+   { id: 'provider/model-name', name: 'Display Name', provider: 'provider', ... }
    ```
 
-2. Update provider class in `src/services/LLMManager.ts` if needed (add to modelMap)
+2. Add provider case in `LLMManager.getProvider()`:
+   ```typescript
+   case 'newprovider':
+     return new ProxyLLMProvider('newprovider', modelId);
+   ```
 
-### Adding New Agentic Tools
+3. Add backend handler in `server/routes/llm.js`:
+   ```javascript
+   if (provider === 'newprovider') {
+     // Call provider API with stored key
+   }
+   ```
 
-1. Define tool in `ADVANCED_SYSTEM_PROMPT.tools.available_tools` (src/data/advancedSystemPrompt.ts)
-2. Add parsing logic in `AIPanel.tsx` (search for `[READ_FILE:` pattern)
-3. Implement backend endpoint if needed (server/index.js)
-4. Add corresponding method to `FileSystemService.ts` if client-side API needed
+### Adding Agentic Tools
+
+1. Define tool in `ADVANCED_SYSTEM_PROMPT` (`src/data/advancedSystemPrompt.ts`)
+2. Add parsing logic in AIInputBox/AIPanel (search for `[READ_FILE:` pattern)
+3. Implement backend endpoint if needed (`server/index.js`)
+4. Add client method to `FileSystemService.ts`
+
+## Common Tasks
 
 ### Debugging Command Execution
 
 1. Check browser console for frontend errors
-2. Check terminal running `node server/index.js` for backend logs
-3. Inspect `termai-*` events in browser DevTools (Console → type `monitorEvents(window)`)
-4. Verify backend is running on port 3001: `curl http://localhost:3001/api/fs/list -X POST -H "Content-Type: application/json" -d '{"path":"."}'`
+2. Check server terminal for backend logs
+3. Inspect events: `monitorEvents(window)` in DevTools
+4. Test backend: `curl http://localhost:3001/api/fs/list -X POST -H "Content-Type: application/json" -d '{"path":"."}'`
 
-### Modifying System Prompt
+### Debugging Skill Learning
 
-Edit `src/data/advancedSystemPrompt.ts` → changes apply immediately on next AI request (no rebuild needed for prompt content, but rebuild needed for TypeScript changes).
+1. Check console for `[Observer]` log messages
+2. Verify `/api/knowledge/skills` endpoint responds
+3. Check `server/data/skills.json` for stored skills
+4. Use manual Sparkles button to trigger learning
+
+### Fixing Rate Limit Issues
+
+If seeing 429 errors or browser crashes:
+
+1. Check `LLMManager` cache is working (30s TTL)
+2. Verify `isActive` prop prevents inactive tabs from calling APIs
+3. Look for component re-render loops in React DevTools
+4. Check `pendingRequests` deduplication in `hasApiKey()`
+
+## Project-Specific Notes
+
+### Environment Files
+
+```bash
+# Frontend: .env (git-ignored)
+VITE_API_URL=http://localhost:3001
+VITE_WS_URL=http://localhost:3001
+
+# Backend: server/.env (git-ignored)
+PORT=3001
+HOST=0.0.0.0
+CORS_ORIGINS=http://localhost:5173
+```
+
+### Session Persistence
+
+- Tabs stored in localStorage: `termai_tabs`
+- Active tab: `termai_active_tab`
+- Sessions: `termai_sessions`
+- Per-session CWD: `termai_cwd_${sessionId}`
+
+### Docker Deployment
+
+```bash
+# Build and run
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Rebuild after changes
+docker-compose up -d --build
+```
+
+### Testing Workflow
+
+No automated tests; manual testing:
+
+1. Start both servers: `npm run dev:all`
+2. Test command execution: `ls`, `pwd`, `cd ~`
+3. Test AI generation: describe a task
+4. Test error recovery: run invalid command
+5. Test SSH/interactive mode
+6. Test skill learning: complete multi-step task, check Skills modal
