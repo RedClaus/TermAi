@@ -32,6 +32,7 @@ import { useChatHistory } from "../../hooks/useChatHistory";
 import { useSafetyCheck } from "../../hooks/useSafetyCheck";
 import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import { useObserver } from "../../hooks/useObserver";
+// useSettingsLoader available for future refactoring - see src/hooks/useSettingsLoader.ts
 
 // Components
 import { ModelSelector } from "../AI/ModelSelector";

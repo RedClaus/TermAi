@@ -21,3 +21,25 @@ export {
   useFocusTrap,
 } from "./useKeyboardNavigation";
 export { useCommandHistory } from "./useCommandHistory";
+
+// New consolidated hooks
+export { useSettingsLoader } from "./useSettingsLoader";
+export type { SettingsLoaderOptions, SettingsLoaderResult } from "./useSettingsLoader";
+
+export { useAutoRunMachine } from "./useAutoRunMachine";
+export type { StopReason, Message as AutoRunMessage, AutoRunConfig } from "./useAutoRunMachine";
+export {
+  MAX_AUTO_STEPS,
+  MAX_STALLS_BEFORE_ASK,
+  APP_SUCCESS_INDICATORS,
+  SERVER_PATTERNS,
+  extractPort,
+  buildTaskSummary,
+  formatOutputMessage,
+  isCodingCommand,
+  processResponseForCommand,
+  detectResponseLoop,
+} from "./useAutoRunMachine";
+
+export { useUIState, shouldShowComplexDialog } from "./useUIState";
+export type { UIState, UIStateActions, UseUIStateOptions } from "./useUIState";
