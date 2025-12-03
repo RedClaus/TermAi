@@ -1,220 +1,246 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Block } from './Block';
-import { InputArea } from './InputArea';
-import { InteractiveBlock } from './InteractiveBlock';
-import { Dashboard } from './Dashboard';
-import type { BlockData } from '../../types';
-import { executeCommand, cancelCommand } from '../../utils/commandRunner';
-import styles from './TerminalSession.module.css';
-import { v4 as uuidv4 } from 'uuid';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Block } from "./Block";
+import { InputArea } from "./InputArea";
+import { InteractiveBlock } from "./InteractiveBlock";
+import { Dashboard } from "./Dashboard";
+import type { BlockData } from "../../types";
+import type {
+  RunCommandPayload,
+  CancelCommandPayload,
+} from "../../events/types";
+import { executeCommand, cancelCommand } from "../../utils/commandRunner";
+import { emit } from "../../events";
+import { useTermAiEvent } from "../../hooks/useTermAiEvent";
+import styles from "./TerminalSession.module.css";
+import { v4 as uuidv4 } from "uuid";
 
 interface TerminalSessionProps {
-    sessionId?: string;
+  sessionId?: string;
 }
 
-export const TerminalSession: React.FC<TerminalSessionProps> = ({ sessionId }) => {
-    const [blocks, setBlocks] = useState<BlockData[]>([]);
-    const [cwd, setCwd] = useState('~');
-    const scrollRef = useRef<HTMLDivElement>(null);
+export const TerminalSession: React.FC<TerminalSessionProps> = ({
+  sessionId,
+}) => {
+  const [blocks, setBlocks] = useState<BlockData[]>([]);
+  const [cwd, setCwd] = useState("~");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const currentCommandRef = useRef<string | null>(null);
 
+  // Load history specific to session if provided
+  useEffect(() => {
+    if (sessionId) {
+      const storedCwd = localStorage.getItem(`termai_cwd_${sessionId}`);
+      if (storedCwd) setCwd(storedCwd);
+      setBlocks([]);
+    }
+  }, [sessionId]);
 
-    // Load history specific to session if provided
-    useEffect(() => {
-        if (sessionId) {
-            const storedCwd = localStorage.getItem(`termai_cwd_${sessionId}`);
-            if (storedCwd) setCwd(storedCwd);
+  // Save CWD and emit event for AI (scoped)
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem(`termai_cwd_${sessionId}`, cwd);
+    }
+    emit("termai-cwd-changed", { cwd, sessionId });
+  }, [cwd, sessionId]);
 
-            // Reset blocks for new session (unless we implement block persistence later)
-            setBlocks([]);
-        }
-    }, [sessionId]);
+  const handleExecute = useCallback(
+    async (command: string) => {
+      if (command === "clear") {
+        setBlocks([]);
+        return;
+      }
 
-    // Save CWD and emit event for AI (scoped)
-    useEffect(() => {
-        if (sessionId) {
-            localStorage.setItem(`termai_cwd_${sessionId}`, cwd);
-        }
-        window.dispatchEvent(new CustomEvent('termai-cwd-changed', {
-            detail: { cwd, sessionId }
-        }));
-    }, [cwd, sessionId]);
+      const tempId = uuidv4();
+      const isInteractive = command.trim().startsWith("ssh");
+      currentCommandRef.current = tempId;
 
-    useEffect(() => {
-        const handleRunCommand = (e: CustomEvent<{ command: string }>) => {
-            handleExecute(e.detail.command);
-        };
+      const pendingBlock: BlockData = {
+        id: tempId,
+        command,
+        output: "",
+        cwd,
+        timestamp: Date.now(),
+        exitCode: 0,
+        isLoading: true,
+        isInteractive,
+      };
 
-        window.addEventListener('termai-run-command' as any, handleRunCommand as any);
-        return () => {
-            window.removeEventListener('termai-run-command' as any, handleRunCommand as any);
-        };
-    }, [cwd, blocks, sessionId]); // Re-bind when state changes to capture latest cwd or sessionId
+      setBlocks((prev) => [...prev, pendingBlock]);
 
-    const handleExecute = async (command: string) => {
-        if (command === 'clear') {
-            setBlocks([]);
-            return;
-        }
+      // Emit start event for AI Watchdog
+      emit("termai-command-started", { commandId: tempId, command, sessionId });
 
-        const tempId = uuidv4();
-        const isInteractive = command.trim().startsWith('ssh');
-
-        const pendingBlock: BlockData = {
-            id: tempId,
-            command,
-            output: '',
-            cwd,
-            timestamp: Date.now(),
-            exitCode: 0,
-            isLoading: true,
-            isInteractive
-        };
-
-        setBlocks(prev => [...prev, pendingBlock]);
-
-        // Emit start event for AI Watchdog
-        window.dispatchEvent(new CustomEvent('termai-command-started', {
-            detail: { commandId: tempId, command, sessionId }
-        }));
-
-        // Scroll to bottom immediately
-        setTimeout(() => {
-            if (scrollRef.current) {
-                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-            }
-        }, 10);
-
-        if (isInteractive) {
-            // Interactive blocks handle their own execution via WebSocket
-            return;
-        }
-
-        // Listen for cancel events for this specific command
-        const handleCancel = (e: CustomEvent<{ commandId: string, sessionId?: string }>) => {
-            // Only cancel if it matches our session (or if no session specified for backward compat)
-            if (e.detail.commandId === tempId && (!e.detail.sessionId || e.detail.sessionId === sessionId)) {
-                cancelCommand(tempId);
-                setBlocks(prev => prev.map(b =>
-                    b.id === tempId
-                        ? { ...b, output: 'Command cancelled by user/AI.', exitCode: 130, isLoading: false }
-                        : b
-                ));
-
-                // Notify AI that command is finished (cancelled) so it can recover
-                window.dispatchEvent(new CustomEvent('termai-command-finished', {
-                    detail: {
-                        command,
-                        output: 'Command cancelled by user/AI.',
-                        exitCode: 130,
-                        sessionId
-                    }
-                }));
-            }
-        };
-        window.addEventListener('termai-cancel-command' as any, handleCancel as any);
-
-        try {
-            const result = await executeCommand(command, cwd, tempId);
-
-            setBlocks(prev => prev.map(b =>
-                b.id === tempId
-                    ? { ...b, output: result.output, exitCode: result.exitCode, isLoading: false }
-                    : b
-            ));
-
-            if (result.newCwd) {
-                setCwd(result.newCwd);
-                window.dispatchEvent(new CustomEvent('termai-cwd-changed', { detail: { cwd: result.newCwd } }));
-            }
-
-            // Emit output event for System Overseer (to prove aliveness)
-            window.dispatchEvent(new CustomEvent('termai-command-output', {
-                detail: { commandId: tempId, output: result.output, sessionId }
-            }));
-
-            // Emit event for AI to see output
-            window.dispatchEvent(new CustomEvent('termai-command-finished', {
-                detail: {
-                    command,
-                    output: result.output,
-                    exitCode: result.exitCode,
-                    sessionId // Ensure sessionId is passed
-                }
-            }));
-        } catch (error) {
-            // Failsafe: Ensure we don't hang
-            setBlocks(prev => prev.map(b =>
-                b.id === tempId
-                    ? { ...b, output: `Error: ${(error as Error).message}`, exitCode: 1, isLoading: false }
-                    : b
-            ));
-            window.dispatchEvent(new CustomEvent('termai-command-finished', {
-                detail: {
-                    command,
-                    output: `Error: ${(error as Error).message}`,
-                    exitCode: 1,
-                    sessionId
-                }
-            }));
-        } finally {
-            window.removeEventListener('termai-cancel-command' as any, handleCancel as any);
-        }
-
-        setTimeout(() => {
-            if (scrollRef.current) {
-                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-            }
-        }, 10);
-    };
-
-    // Auto-scroll to bottom
-    useEffect(() => {
+      // Scroll to bottom immediately
+      setTimeout(() => {
         if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [blocks]);
+      }, 10);
 
-    const handleInteractiveExit = (blockId: string, exitCode: number) => {
-        setBlocks(prev => prev.map(b =>
-            b.id === blockId
-                ? { ...b, isLoading: false, exitCode }
-                : b
-        ));
+      if (isInteractive) {
+        // Interactive blocks handle their own execution via WebSocket
+        return;
+      }
 
-        // Notify AI that interactive session finished
-        const block = blocks.find(b => b.id === blockId);
-        if (block) {
-            window.dispatchEvent(new CustomEvent('termai-command-finished', {
-                detail: {
-                    command: block.command,
-                    output: '[Interactive Session Finished]',
-                    exitCode,
-                    sessionId
+      try {
+        const result = await executeCommand(command, cwd, tempId);
+
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.id === tempId
+              ? {
+                  ...b,
+                  output: result.output,
+                  exitCode: result.exitCode,
+                  isLoading: false,
                 }
-            }));
-        }
-    };
+              : b,
+          ),
+        );
 
-    return (
-        <div className={styles.container}>
-            <div className={styles.scrollArea} ref={scrollRef}>
-                {blocks.length === 0 && (
-                    <Dashboard onCommand={handleExecute} />
-                )}
-                {blocks.map(block => (
-                    block.isInteractive ? (
-                        <InteractiveBlock
-                            key={block.id}
-                            command={block.command}
-                            cwd={block.cwd}
-                            onExit={(code) => handleInteractiveExit(block.id, code)}
-                        />
-                    ) : (
-                        <Block key={block.id} data={block} />
-                    )
-                ))}
-            </div>
-            <InputArea onExecute={handleExecute} cwd={cwd} />
-        </div>
-    );
+        if (result.newCwd) {
+          setCwd(result.newCwd);
+          emit("termai-cwd-changed", { cwd: result.newCwd, sessionId });
+        }
+
+        // Emit output event for System Overseer
+        emit("termai-command-output", {
+          commandId: tempId,
+          output: result.output,
+          sessionId,
+        });
+
+        // Emit event for AI to see output
+        emit("termai-command-finished", {
+          command,
+          output: result.output,
+          exitCode: result.exitCode,
+          sessionId,
+        });
+      } catch (error) {
+        const errorMessage = `Error: ${(error as Error).message}`;
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.id === tempId
+              ? { ...b, output: errorMessage, exitCode: 1, isLoading: false }
+              : b,
+          ),
+        );
+        emit("termai-command-finished", {
+          command,
+          output: errorMessage,
+          exitCode: 1,
+          sessionId,
+        });
+      } finally {
+        currentCommandRef.current = null;
+      }
+
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 10);
+    },
+    [cwd, sessionId],
+  );
+
+  // Handle run command events from AI
+  useTermAiEvent(
+    "termai-run-command",
+    (payload: RunCommandPayload) => {
+      // Only execute if for this session or no session specified
+      if (!payload.sessionId || payload.sessionId === sessionId) {
+        handleExecute(payload.command);
+      }
+    },
+    [handleExecute, sessionId],
+  );
+
+  // Handle cancel command events
+  useTermAiEvent(
+    "termai-cancel-command",
+    (payload: CancelCommandPayload) => {
+      if (
+        payload.commandId === currentCommandRef.current &&
+        (!payload.sessionId || payload.sessionId === sessionId)
+      ) {
+        cancelCommand(payload.commandId);
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.id === payload.commandId
+              ? {
+                  ...b,
+                  output: "Command cancelled by user/AI.",
+                  exitCode: 130,
+                  isLoading: false,
+                }
+              : b,
+          ),
+        );
+
+        // Get the command from blocks
+        const block = blocks.find((b) => b.id === payload.commandId);
+        if (block) {
+          emit("termai-command-finished", {
+            command: block.command,
+            output: "Command cancelled by user/AI.",
+            exitCode: 130,
+            sessionId,
+          });
+        }
+      }
+    },
+    [blocks, sessionId],
+  );
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [blocks]);
+
+  const handleInteractiveExit = useCallback(
+    (blockId: string, exitCode: number) => {
+      setBlocks((prev) =>
+        prev.map((b) =>
+          b.id === blockId ? { ...b, isLoading: false, exitCode } : b,
+        ),
+      );
+
+      // Notify AI that interactive session finished
+      const block = blocks.find((b) => b.id === blockId);
+      if (block) {
+        emit("termai-command-finished", {
+          command: block.command,
+          output: "[Interactive Session Finished]",
+          exitCode,
+          sessionId,
+        });
+      }
+    },
+    [blocks, sessionId],
+  );
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.scrollArea} ref={scrollRef}>
+        {blocks.length === 0 && <Dashboard onCommand={handleExecute} />}
+        {blocks.map((block) =>
+          block.isInteractive ? (
+            <InteractiveBlock
+              key={block.id}
+              command={block.command}
+              cwd={block.cwd}
+              onExit={(code) => handleInteractiveExit(block.id, code)}
+            />
+          ) : (
+            <Block key={block.id} data={block} />
+          ),
+        )}
+      </div>
+      <InputArea onExecute={handleExecute} cwd={cwd} />
+    </div>
+  );
 };

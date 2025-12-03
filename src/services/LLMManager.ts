@@ -1,201 +1,237 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
+/**
+ * LLM Manager - Client-side interface for AI providers
+ * All API calls are proxied through the backend server for security
+ * API keys are stored server-side only
+ */
+
+import { config } from "../config";
 
 export interface LLMProvider {
-    chat(message: string, context?: string): Promise<string>;
+  chat(message: string, context?: string): Promise<string>;
 }
 
-export class GeminiProvider implements LLMProvider {
-    private genAI: GoogleGenerativeAI;
-    private model: any;
+export interface ChatMessage {
+  role: "user" | "ai" | "system";
+  content: string;
+}
 
-    constructor(apiKey: string, modelId: string = 'gemini-pro') {
-        this.genAI = new GoogleGenerativeAI(apiKey);
-        // Map custom IDs to real Gemini models
-        const modelMap: Record<string, string> = {
-            'gemini-1-5-pro': 'gemini-1.5-pro',
-            'gemini-1-5-flash': 'gemini-1.5-flash',
-            'auto': 'gemini-1.5-pro'
-        };
-        const realModel = modelMap[modelId] || 'gemini-pro';
-        this.model = this.genAI.getGenerativeModel({ model: realModel });
-    }
+export interface LLMResponse {
+  content: string;
+  provider: string;
+  model: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+  error?: string;
+}
 
-    async chat(message: string, context?: string): Promise<string> {
-        try {
-            const prompt = context
-                ? `Context: ${context}\n\nUser: ${message}`
-                : message;
+/**
+ * Proxy-based LLM Provider
+ * Routes all requests through the backend server
+ */
+class ProxyLLMProvider implements LLMProvider {
+  private provider: string;
+  private modelId: string;
+  private endpoint?: string;
 
-            const result = await this.model.generateContent(prompt);
-            const response = await result.response;
-            return response.text();
-        } catch (error) {
-            console.error('Error calling Gemini API:', error);
-            throw error;
+  constructor(provider: string, modelId?: string, endpoint?: string) {
+    this.provider = provider;
+    this.modelId = modelId || "auto";
+    this.endpoint = endpoint;
+  }
+
+  async chat(message: string, context?: string): Promise<string> {
+    // Build messages array from context
+    const messages: ChatMessage[] = [];
+
+    if (context) {
+      // Parse context into messages (format: "role: content\n...")
+      const lines = context.split("\n");
+      let currentRole: "user" | "ai" | "system" | null = null;
+      let currentContent: string[] = [];
+
+      for (const line of lines) {
+        const roleMatch = line.match(/^(user|ai|system|User|AI|System):\s*/i);
+        if (roleMatch) {
+          // Save previous message
+          if (currentRole && currentContent.length > 0) {
+            messages.push({
+              role: currentRole,
+              content: currentContent.join("\n").trim(),
+            });
+          }
+          currentRole = roleMatch[1].toLowerCase() as "user" | "ai" | "system";
+          currentContent = [line.substring(roleMatch[0].length)];
+        } else if (currentRole) {
+          currentContent.push(line);
         }
-    }
-}
+      }
 
-export class OpenAIProvider implements LLMProvider {
-    private client: OpenAI;
-    private modelId: string;
-
-    constructor(apiKey: string, modelId: string = 'gpt-4o') {
-        this.client = new OpenAI({
-            apiKey: apiKey,
-            dangerouslyAllowBrowser: true // Required for client-side usage
+      // Don't forget the last message
+      if (currentRole && currentContent.length > 0) {
+        messages.push({
+          role: currentRole,
+          content: currentContent.join("\n").trim(),
         });
-        // Map custom IDs to real OpenAI models
-        const modelMap: Record<string, string> = {
-            'gpt-5-high': 'gpt-4o', // Fallback for now
-            'gpt-4o': 'gpt-4o',
-            'auto': 'gpt-4o'
-        };
-        this.modelId = modelMap[modelId] || 'gpt-4o';
+      }
     }
 
-    async chat(message: string, context?: string): Promise<string> {
-        try {
-            const completion = await this.client.chat.completions.create({
-                messages: [
-                    { role: 'system', content: context || 'You are a helpful assistant.' },
-                    { role: 'user', content: message }
-                ],
-                model: this.modelId,
-            });
+    // Add the current message
+    messages.push({ role: "user", content: message });
 
-            return completion.choices[0]?.message?.content || 'No response from OpenAI.';
-        } catch (error) {
-            console.error('Error calling OpenAI API:', error);
-            throw error;
-        }
+    try {
+      const response = await fetch(config.getApiUrl(config.api.llm.chat), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: this.provider,
+          model: this.modelId,
+          messages,
+          systemPrompt: context ? undefined : "You are a helpful assistant.",
+          endpoint: this.endpoint,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `Server error: ${response.statusText}`);
+      }
+
+      const data: LLMResponse = await response.json();
+      return data.content;
+    } catch (error) {
+      console.error(`Error calling ${this.provider} via proxy:`, error);
+      throw error;
     }
+  }
 }
 
-export class AnthropicProvider implements LLMProvider {
-    private client: Anthropic;
-    private modelId: string;
-
-    constructor(apiKey: string, modelId: string = 'claude-3-opus-20240229') {
-        this.client = new Anthropic({
-            apiKey: apiKey,
-            dangerouslyAllowBrowser: true // Required for client-side usage
-        });
-        // Map custom IDs to real Anthropic models
-        const modelMap: Record<string, string> = {
-            'claude-3-opus': 'claude-3-opus-20240229',
-            'claude-3-5-sonnet': 'claude-3-5-sonnet-20240620',
-            'claude-4-5-sonnet-thinking': 'claude-3-5-sonnet-20240620', // Fallback
-            'auto': 'claude-3-5-sonnet-20240620'
-        };
-        this.modelId = modelMap[modelId] || 'claude-3-opus-20240229';
-    }
-
-    async chat(message: string, context?: string): Promise<string> {
-        try {
-            const msg = await this.client.messages.create({
-                model: this.modelId,
-                max_tokens: 1024,
-                system: context,
-                messages: [
-                    { role: "user", content: message }
-                ],
-            });
-
-            // Handle the response content safely
-            const textContent = msg.content.find(block => block.type === 'text');
-            return textContent ? textContent.text : 'No text response from Anthropic.';
-        } catch (error) {
-            console.error('Error calling Anthropic API:', error);
-            throw error;
-        }
-    }
-}
-
-export class OllamaProvider implements LLMProvider {
-    private baseUrl: string;
-    private modelId: string;
-
-    constructor(baseUrl: string = 'http://localhost:11434', modelId: string = 'llama3') {
-        this.baseUrl = baseUrl;
-
-        // Handle dynamic model IDs from fetchOllamaModels
-        if (modelId.startsWith('ollama-')) {
-            this.modelId = modelId.replace('ollama-', '');
-        } else {
-            // Map custom IDs to likely Ollama model names (fallback for hardcoded ones)
-            const modelMap: Record<string, string> = {
-                'ollama-llama3': 'llama3',
-                'ollama-mistral': 'mistral',
-                'ollama-codellama': 'codellama',
-                'auto': 'llama3'
-            };
-            this.modelId = modelMap[modelId] || 'llama3';
-        }
-    }
-
-    async chat(message: string, context?: string): Promise<string> {
-        const payload = {
-            model: this.modelId,
-            messages: [
-                { role: 'system', content: context || 'You are a helpful assistant.' },
-                { role: 'user', content: message }
-            ],
-            stream: false
-        };
-
-        try {
-            // Try direct connection first
-            const response = await fetch(`${this.baseUrl}/api/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) throw new Error(`Direct connection failed: ${response.statusText}`);
-            const data = await response.json();
-            return data.message?.content || 'No response from Ollama.';
-        } catch (directError) {
-            console.warn('Direct Ollama connection failed, trying proxy...', directError);
-
-            try {
-                // Try via proxy
-                const response = await fetch('http://localhost:3001/api/proxy/ollama/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        endpoint: this.baseUrl,
-                        ...payload
-                    }),
-                });
-
-                if (!response.ok) throw new Error(`Proxy connection failed: ${response.statusText}`);
-                const data = await response.json();
-                return data.message?.content || 'No response from Ollama via Proxy.';
-            } catch (proxyError) {
-                console.error('Error calling Ollama API (Direct & Proxy):', proxyError);
-                throw proxyError;
-            }
-        }
-    }
-}
-
+/**
+ * LLM Manager - Factory for creating providers
+ */
 export class LLMManager {
-    static getProvider(type: string, apiKey: string, modelId?: string): LLMProvider {
-        switch (type) {
-            case 'gemini':
-                return new GeminiProvider(apiKey, modelId);
-            case 'openai':
-                return new OpenAIProvider(apiKey, modelId);
-            case 'anthropic':
-                return new AnthropicProvider(apiKey, modelId);
-            case 'ollama':
-                // For Ollama, apiKey might be treated as base URL if provided, or ignored
-                return new OllamaProvider(apiKey || 'http://localhost:11434', modelId);
-            default:
-                throw new Error(`Unknown provider: ${type}`);
-        }
+  /**
+   * Get a provider instance
+   * All requests are proxied through the server
+   */
+  static getProvider(
+    type: string,
+    _apiKey?: string,
+    modelId?: string,
+  ): LLMProvider {
+    // Note: apiKey parameter is kept for backward compatibility but ignored
+    // API keys are now managed server-side
+    switch (type) {
+      case "gemini":
+        return new ProxyLLMProvider("gemini", modelId);
+      case "openai":
+        return new ProxyLLMProvider("openai", modelId);
+      case "anthropic":
+        return new ProxyLLMProvider("anthropic", modelId);
+      case "ollama":
+        // For Ollama, pass the endpoint
+        const endpoint =
+          localStorage.getItem("termai_ollama_endpoint") ||
+          config.defaultOllamaEndpoint;
+        return new ProxyLLMProvider("ollama", modelId, endpoint);
+      default:
+        throw new Error(`Unknown provider: ${type}`);
     }
+  }
+
+  /**
+   * Set API key on the server
+   */
+  static async setApiKey(provider: string, apiKey: string): Promise<boolean> {
+    try {
+      const response = await fetch(config.getApiUrl(config.api.llm.setKey), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to set API key");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error setting API key:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if API key exists on the server
+   */
+  static async hasApiKey(provider: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${config.getApiUrl(config.api.llm.hasKey)}?provider=${encodeURIComponent(provider)}`,
+      );
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      return data.hasKey;
+    } catch (error) {
+      console.error("Error checking API key:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Check which providers have API keys configured
+   */
+  static async getConfiguredProviders(): Promise<Record<string, boolean>> {
+    try {
+      const response = await fetch(config.getApiUrl("/api/llm/has-key/all"));
+
+      if (!response.ok) {
+        return { gemini: false, openai: false, anthropic: false };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking configured providers:", error);
+      return { gemini: false, openai: false, anthropic: false };
+    }
+  }
+
+  /**
+   * Fetch available Ollama models
+   */
+  static async fetchOllamaModels(endpoint?: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      provider: "ollama";
+    }>
+  > {
+    const baseEndpoint = endpoint || config.defaultOllamaEndpoint;
+
+    try {
+      const response = await fetch(
+        `${config.getApiUrl(config.api.llm.models)}?provider=ollama&endpoint=${encodeURIComponent(baseEndpoint)}`,
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Ollama models");
+      }
+
+      const data = await response.json();
+      return data.models;
+    } catch (error) {
+      console.error("Error fetching Ollama models:", error);
+      throw error;
+    }
+  }
 }
+
+// Re-export types for backward compatibility
+export type { LLMResponse, ChatMessage };
