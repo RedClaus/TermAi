@@ -47,3 +47,6 @@ server/.env
 
 # Knowledge Engine vector database
 .term-ai/
+
+# Imported conversations may contain sensitive data
+server/data/imported-conversations.json
