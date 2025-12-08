@@ -2,17 +2,23 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Block } from "./Block";
 import { InputArea } from "./InputArea";
 import { InteractiveBlock } from "./InteractiveBlock";
+import { VirtualList, useVirtualList } from "../common";
 import type { BlockData } from "../../types";
 import type {
   RunCommandPayload,
   CancelCommandPayload,
 } from "../../events/types";
-import { executeCommand, cancelCommand } from "../../utils/commandRunner";
+import { executeCommand, cancelCommand, detectCommandType } from "../../utils/commandRunner";
 import { emit } from "../../events";
 import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import { InitialCwdService } from "../../services/InitialCwdService";
 import { PathCorrectionDialog } from "../AI/PathCorrectionDialog";
 import { v4 as uuidv4 } from "uuid";
+
+// Threshold for enabling virtualization (only virtualize when list is large)
+const VIRTUALIZATION_THRESHOLD = 20;
+// Estimated height for a command block (collapsed state)
+const ESTIMATED_BLOCK_HEIGHT = 150;
 
 interface TerminalSessionProps {
   sessionId?: string;
@@ -31,6 +37,12 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentCommandRef = useRef<string | null>(null);
+
+  // Virtual list hook for dynamic heights
+  const { getItemHeight } = useVirtualList(blocks, ESTIMATED_BLOCK_HEIGHT);
+
+  // Determine if we should use virtualization based on block count
+  const shouldVirtualize = blocks.length > VIRTUALIZATION_THRESHOLD;
 
   // Fetch initial CWD from server (set by CLI launch)
   useEffect(() => {
@@ -78,52 +90,11 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
       }
 
       const tempId = uuidv4();
-      
-      // Check for interactive commands that need PTY/xterm
-      const interactiveCommands = [
-        "ssh", "sudo", "nano", "vim", "vi", "emacs", 
-        "top", "htop", "less", "more", "man", 
-        "python", "python3", "node", "npm", "yarn", "pnpm", "bun",
-        "docker", "docker-compose", "git"
-      ];
-      
-      const firstWord = command.trim().split(/\s+/)[0];
-      const args = command.trim().split(/\s+/).slice(1);
-      
-      // Heuristic: Is this likely an interactive command or long-running process?
-      let isInteractive = false;
 
-      // 1. Explicit interactive tools
-      if (interactiveCommands.includes(firstWord)) {
-        // Special exclusions (non-interactive uses)
-        const isVersion = args.includes("-v") || args.includes("--version");
-        const isHelp = args.includes("-h") || args.includes("--help");
-        const isGitNonInteractive = firstWord === "git" && 
-          ["status", "log", "diff", "add", "commit", "push", "pull", "fetch", "clone"].includes(args[0]);
-        const isDockerNonInteractive = (firstWord === "docker" || firstWord === "docker-compose") &&
-          ["ps", "images", "info", "version"].includes(args[0]);
-        const isNpmNonInteractive = (firstWord === "npm" || firstWord === "yarn" || firstWord === "pnpm") &&
-          ["install", "i", "add", "remove", "test", "run build"].some(cmd => args[0] === cmd || (args[0] === "run" && args[1] === "build"));
-
-        if (!isVersion && !isHelp && !isGitNonInteractive && !isDockerNonInteractive && !isNpmNonInteractive) {
-          isInteractive = true;
-        }
-        
-        // REPLs are always interactive if no args (except flags)
-        if ((firstWord === "python" || firstWord === "python3" || firstWord === "node") && args.length === 0) {
-          isInteractive = true;
-        }
-      }
-
-      // 2. Shell scripts and local executables
-      if (command.includes(".sh") || command.startsWith("./")) {
-        isInteractive = true;
-      }
-
-      // 3. SSH is always interactive
-      if (command.trim().startsWith("ssh")) {
-        isInteractive = true;
-      }
+      // Use centralized command type detection from BackgroundTerminalService
+      // This includes detection for interactive apps, password-prompting commands, and background processes
+      const commandType = detectCommandType(command);
+      const isInteractive = commandType === 'interactive' || commandType === 'background';
 
       currentCommandRef.current = tempId;
 
@@ -301,32 +272,68 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
     [blocks, sessionId],
   );
 
+  // Memoized render function for VirtualList
+  const renderBlock = useCallback(
+    (block: BlockData, _index: number) => {
+      if (block.isInteractive) {
+        return (
+          <InteractiveBlock
+            key={block.id}
+            command={block.command}
+            cwd={block.cwd}
+            onExit={(code) => handleInteractiveExit(block.id, code)}
+          />
+        );
+      }
+      return <Block key={block.id} data={block} sessionId={sessionId} />;
+    },
+    [handleInteractiveExit, sessionId],
+  );
+
   return (
     <div className="flex flex-col h-full w-full bg-gradient-to-br from-[#0d1117] to-[#0a0e14] overflow-hidden">
-      {/* Terminal output area - more generous padding */}
-      <div 
-        className="flex-1 overflow-y-auto px-6 py-6 pb-2 scroll-smooth scrollbar-hide md:px-10"
-        ref={scrollRef}
-      >
-        {blocks.length === 0 && isInitialized && (
+      {/* Terminal output area - conditionally virtualized for performance */}
+      {blocks.length === 0 && isInitialized ? (
+        <div
+          className="flex-1 overflow-y-auto px-6 py-6 pb-2 scroll-smooth scrollbar-hide md:px-10"
+          ref={scrollRef}
+        >
           <div className="flex flex-col items-center justify-center p-12 text-gray-400 text-center">
             <p className="text-base">Terminal ready in <code className="text-cyan-400 bg-[#1c2128] px-2.5 py-1 rounded-lg font-mono">{cwd}</code></p>
             <p className="text-sm mt-3 text-gray-500">Commands from AI will appear here, or type below to run directly.</p>
           </div>
-        )}
-        {blocks.map((block) =>
-          block.isInteractive ? (
-            <InteractiveBlock
-              key={block.id}
-              command={block.command}
-              cwd={block.cwd}
-              onExit={(code) => handleInteractiveExit(block.id, code)}
-            />
-          ) : (
-            <Block key={block.id} data={block} sessionId={sessionId} />
-          ),
-        )}
-      </div>
+        </div>
+      ) : shouldVirtualize ? (
+        /* Virtualized list for large block counts (>20 blocks) */
+        <div className="flex-1 overflow-hidden">
+          <VirtualList
+            items={blocks}
+            itemHeight={getItemHeight}
+            overscan={3}
+            renderItem={renderBlock}
+            className="px-6 py-6 pb-2 md:px-10"
+          />
+        </div>
+      ) : (
+        /* Standard rendering for small block counts */
+        <div
+          className="flex-1 overflow-y-auto px-6 py-6 pb-2 scroll-smooth scrollbar-hide md:px-10"
+          ref={scrollRef}
+        >
+          {blocks.map((block) =>
+            block.isInteractive ? (
+              <InteractiveBlock
+                key={block.id}
+                command={block.command}
+                cwd={block.cwd}
+                onExit={(code) => handleInteractiveExit(block.id, code)}
+              />
+            ) : (
+              <Block key={block.id} data={block} sessionId={sessionId} />
+            ),
+          )}
+        </div>
+      )}
       <InputArea onExecute={handleExecute} cwd={cwd} />
       
       {/* Path Correction Dialog */}

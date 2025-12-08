@@ -65,11 +65,31 @@ export function useChatHistory(
 
   /**
    * Persist messages to localStorage whenever they change
+   * Includes quota handling and message pruning
    */
   useEffect(() => {
     if (messages.length > 1) {
       const historyKey = getHistoryKey();
-      localStorage.setItem(historyKey, JSON.stringify(messages));
+      try {
+        // Limit stored messages to prevent quota issues
+        const messagesToStore = messages.slice(-100); // Keep last 100 messages
+        localStorage.setItem(historyKey, JSON.stringify(messagesToStore));
+      } catch (e) {
+        // QuotaExceededError - try to store fewer messages
+        console.warn('[ChatHistory] Storage quota exceeded, pruning messages:', e);
+        try {
+          const prunedMessages = messages.slice(-20); // Keep only last 20
+          localStorage.setItem(historyKey, JSON.stringify(prunedMessages));
+        } catch {
+          // Still failing - remove this history entirely
+          console.warn('[ChatHistory] Unable to persist history, clearing storage');
+          try {
+            localStorage.removeItem(historyKey);
+          } catch {
+            // localStorage completely broken
+          }
+        }
+      }
     }
   }, [messages, getHistoryKey]);
 

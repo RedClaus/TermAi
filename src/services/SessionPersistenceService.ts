@@ -49,11 +49,46 @@ class SessionPersistenceServiceClass {
         ...(lastUserMsg ? { lastUserMessage: lastUserMsg } : {}),
       };
 
-      // Save session state
-      localStorage.setItem(
-        `${SESSION_STATE_PREFIX}${state.id}`,
-        JSON.stringify(state)
-      );
+      // Limit history to prevent quota issues
+      const stateToSave = {
+        ...state,
+        history: state.history.slice(-100), // Keep last 100 messages
+      };
+
+      // Save session state with quota handling
+      try {
+        localStorage.setItem(
+          `${SESSION_STATE_PREFIX}${state.id}`,
+          JSON.stringify(stateToSave)
+        );
+      } catch (quotaError) {
+        // QuotaExceededError - try with fewer messages
+        console.warn('[SessionPersistence] Quota exceeded, pruning history:', quotaError);
+        const prunedState = {
+          ...state,
+          history: state.history.slice(-20), // Keep only last 20
+        };
+        try {
+          localStorage.setItem(
+            `${SESSION_STATE_PREFIX}${state.id}`,
+            JSON.stringify(prunedState)
+          );
+        } catch {
+          // Still failing - clear old sessions
+          console.warn('[SessionPersistence] Clearing old sessions to free space');
+          this.clearOldSessions(5);
+          // Try one more time
+          try {
+            localStorage.setItem(
+              `${SESSION_STATE_PREFIX}${state.id}`,
+              JSON.stringify(prunedState)
+            );
+          } catch {
+            console.error('[SessionPersistence] Unable to save session due to quota');
+            return;
+          }
+        }
+      }
 
       // Update session index
       this.updateSessionIndex(state);
@@ -227,22 +262,38 @@ class SessionPersistenceServiceClass {
   // Private helpers
 
   private updateSessionIndex(state: SessionState): void {
-    const indexData = localStorage.getItem(SESSION_INDEX_KEY);
-    const index: string[] = indexData ? JSON.parse(indexData) : [];
+    try {
+      const indexData = localStorage.getItem(SESSION_INDEX_KEY);
+      const index: string[] = indexData ? JSON.parse(indexData) : [];
 
-    if (!index.includes(state.id)) {
-      index.push(state.id);
-      localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(index));
+      if (!index.includes(state.id)) {
+        index.push(state.id);
+        try {
+          localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(index));
+        } catch {
+          console.warn('[SessionPersistence] Failed to update session index (quota)');
+        }
+      }
+    } catch (e) {
+      console.error('[SessionPersistence] Error updating session index:', e);
     }
   }
 
   private removeFromSessionIndex(sessionId: string): void {
-    const indexData = localStorage.getItem(SESSION_INDEX_KEY);
-    if (!indexData) return;
+    try {
+      const indexData = localStorage.getItem(SESSION_INDEX_KEY);
+      if (!indexData) return;
 
-    const index: string[] = JSON.parse(indexData);
-    const newIndex = index.filter(id => id !== sessionId);
-    localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(newIndex));
+      const index: string[] = JSON.parse(indexData);
+      const newIndex = index.filter(id => id !== sessionId);
+      try {
+        localStorage.setItem(SESSION_INDEX_KEY, JSON.stringify(newIndex));
+      } catch {
+        console.warn('[SessionPersistence] Failed to save session index (quota)');
+      }
+    } catch (e) {
+      console.error('[SessionPersistence] Error removing from session index:', e);
+    }
   }
 
   private formatBytes(bytes: number): string {

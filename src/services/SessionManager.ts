@@ -17,22 +17,29 @@ export class SessionManager {
 
     static {
         // Load active sessions from storage on init
-        try {
-            const stored = localStorage.getItem(ACTIVE_SESSIONS_KEY);
-            if (stored) {
-                const ids = JSON.parse(stored) as string[];
-                ids.forEach(id => this.activeSessions.add(id));
+        // Guard for browser environment
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+            try {
+                const stored = localStorage.getItem(ACTIVE_SESSIONS_KEY);
+                if (stored) {
+                    const ids = JSON.parse(stored) as string[];
+                    ids.forEach(id => this.activeSessions.add(id));
+                }
+            } catch (e) {
+                console.error('Failed to load active sessions', e);
             }
-        } catch (e) {
-            console.error('Failed to load active sessions', e);
         }
     }
 
     private static saveActiveSessions(): void {
-        localStorage.setItem(
-            ACTIVE_SESSIONS_KEY, 
-            JSON.stringify(Array.from(this.activeSessions))
-        );
+        try {
+            localStorage.setItem(
+                ACTIVE_SESSIONS_KEY,
+                JSON.stringify(Array.from(this.activeSessions))
+            );
+        } catch (e) {
+            console.warn('[SessionManager] Failed to save active sessions (quota exceeded?):', e);
+        }
     }
 
     static getSessions(): SavedSession[] {
@@ -52,8 +59,18 @@ export class SessionManager {
 
     /**
      * Start a new session - creates both frontend and backend session
+     * Idempotent: if session is already active, returns existing session without API call
      */
     static async startSession(sessionId: string, name?: string): Promise<SavedSession> {
+        // Idempotency check: if session is already active, just return existing session
+        if (this.activeSessions.has(sessionId)) {
+            const existing = this.getSession(sessionId);
+            if (existing) {
+                console.log(`[SessionManager] Session ${sessionId} already active, skipping start`);
+                return existing;
+            }
+        }
+
         // Start backend session log
         await SessionLogService.startSession(sessionId);
         this.activeSessions.add(sessionId);
@@ -104,8 +121,36 @@ export class SessionManager {
         // Sort by timestamp desc
         sessions.sort((a, b) => b.timestamp - a.timestamp);
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        } catch (e) {
+            console.warn('[SessionManager] Failed to save session (quota exceeded?):', e);
+            // Try to clear old sessions to make room
+            this.pruneOldSessions();
+        }
         window.dispatchEvent(new CustomEvent('termai-sessions-updated'));
+    }
+
+    /**
+     * Remove old sessions to free up localStorage space
+     */
+    private static pruneOldSessions(): void {
+        try {
+            const sessions = this.getSessions();
+            // Keep only the 10 most recent sessions
+            const pruned = sessions.slice(0, 10);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+            console.log(`[SessionManager] Pruned sessions from ${sessions.length} to ${pruned.length}`);
+        } catch (e) {
+            // If still failing, clear all sessions
+            console.warn('[SessionManager] Clearing all sessions due to quota issues');
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(ACTIVE_SESSIONS_KEY);
+            } catch {
+                // localStorage completely broken, continue without persistence
+            }
+        }
     }
 
     static async deleteSession(id: string): Promise<void> {
@@ -121,7 +166,11 @@ export class SessionManager {
 
         // Remove from localStorage
         const sessions = this.getSessions().filter(s => s.id !== id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        } catch (e) {
+            console.warn('[SessionManager] Failed to save after delete (quota exceeded?):', e);
+        }
         window.dispatchEvent(new CustomEvent('termai-sessions-updated'));
     }
 
