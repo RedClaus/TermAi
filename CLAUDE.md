@@ -4,13 +4,96 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**TermAI** is an AI-powered terminal assistant with React + TypeScript frontend and Node.js/Express backend. The UI is a vertical split: Terminal (top) for command blocks/output, AI Panel (bottom) for chat/auto-run controls. Panels are resizable.
+**TermAI** is an AI-powered terminal assistant with a **hybrid Electron/Web architecture**. The UI features Apple-inspired design with a vertical split: Terminal (top) for command blocks/output, AI Panel (bottom) for chat/auto-run controls. Panels are resizable.
 
 Key features: Multi-AI provider support, skill learning, auto-run mode, PTY for interactive commands, Visual Flow Editor, RAPID Framework for first-shot accuracy.
 
+**Architecture Modes:**
+- **Electron Desktop**: Native app with direct node-pty access, IPC-based communication
+- **Web Browser**: Traditional HTTP/WebSocket via Express backend (fallback)
+
 ## Architecture
 
-### Client-Server Model
+### Monorepo Structure (pnpm Workspaces)
+
+```
+TermAi/
+├── packages/
+│   ├── pty-service/        # Shared PTY management (node-pty wrapper)
+│   │   └── src/PTYManager.ts
+│   ├── ui-core/            # Universal Bridge + Design Tokens
+│   │   ├── src/hooks/useSystem.ts    # Environment detection + transport
+│   │   ├── src/transport/            # EventTransport, ApiTransport, StorageTransport
+│   │   └── src/styles/               # Apple Design System CSS
+│   └── shared-types/       # TypeScript types shared across packages
+├── apps/
+│   ├── electron/           # Electron desktop application
+│   │   ├── main/           # Main process (node-pty, IPC handlers)
+│   │   ├── preload/        # Context bridge (secure IPC)
+│   │   └── renderer/       # Vite-bundled React (uses ui-core)
+│   └── web/                # Express web server (fallback mode)
+│       └── server/         # Current server code, relocated
+├── src/                    # Legacy frontend (being migrated to ui-core)
+├── pnpm-workspace.yaml     # Workspace configuration
+└── tsconfig.base.json      # Shared TypeScript config
+```
+
+### Hybrid Architecture (Electron + Web)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ELECTRON MODE (Desktop)                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Main Process                    Renderer Process               │
+│  ┌─────────────────┐            ┌─────────────────────────┐     │
+│  │ PTYManager      │◄──IPC────►│ useSystem() hook        │     │
+│  │ (node-pty)      │            │   ├─ isElectron: true   │     │
+│  │                 │            │   ├─ pty.spawn()        │     │
+│  │ File Operations │            │   ├─ fs.readDir()       │     │
+│  │ Native APIs     │            │   └─ events.emit()      │     │
+│  └─────────────────┘            └─────────────────────────┘     │
+│         │                                   │                    │
+│         └──────── Preload (contextBridge) ──┘                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      WEB MODE (Browser)                          │
+├─────────────────────────────────────────────────────────────────┤
+│  React Frontend                  Express Backend                 │
+│  ┌─────────────────┐            ┌─────────────────────────┐     │
+│  │ useSystem() hook│◄──HTTP────►│ REST APIs               │     │
+│  │   ├─ isElectron: false       │   ├─ /api/execute       │     │
+│  │   ├─ pty.spawn() ──────────► │   ├─ /api/fs/*          │     │
+│  │   ├─ fs.readDir() ─────────► │   └─ /api/llm/*         │     │
+│  │   └─ events.emit() ◄─WS─────►│                         │     │
+│  └─────────────────┘            │ Socket.IO (PTY streams) │     │
+│                                 └─────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Universal Bridge Pattern (`useSystem()`)
+
+The `useSystem()` hook from `@termai/ui-core` provides identical APIs in both environments:
+
+```typescript
+import { useSystem } from '@termai/ui-core';
+
+function Terminal() {
+  const { pty, fs, events, isElectron } = useSystem();
+
+  // Works identically in Electron (IPC) and Web (HTTP/WebSocket)
+  const session = await pty.spawn('/bin/bash', [], { cwd: '/home' });
+  const files = await fs.readDir('/home/user/projects');
+  events.on('command-finished', handler);
+}
+```
+
+**Transport Abstraction:**
+- `EventTransport`: CustomEvents (web) ↔ IPC events (Electron)
+- `ApiTransport`: fetch() (web) ↔ ipcRenderer.invoke() (Electron)
+- `StorageTransport`: localStorage (web) ↔ electron-store (Electron)
+
+### Legacy Client-Server Model (Web Mode)
 
 ```
 CLI (bin/termai.cjs)
@@ -410,3 +493,216 @@ Before merging UI changes, run:
 | `AIPanel.tsx` | Wrap in ErrorBoundary, virtualize long chats |
 | `App.tsx` | Add ErrorBoundary wrappers around main sections |
 | All hooks | Verify cleanup function in every useEffect |
+
+---
+
+## Apple Design System
+
+### Design Philosophy
+
+TermAI follows Apple's Human Interface Guidelines for a premium, native-feeling experience:
+
+- **Clarity**: Content is prioritized with clean visual hierarchy
+- **Deference**: UI chrome defers to content through translucent backgrounds
+- **Depth**: Layering with subtle shadows and vibrancy effects
+
+### Color System (CSS Variables)
+
+```css
+:root {
+  /* Semantic Colors */
+  --color-background-primary: #1c1c1e;
+  --color-background-secondary: #2c2c2e;
+  --color-background-tertiary: #3a3a3c;
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.55);
+  --color-text-tertiary: rgba(255, 255, 255, 0.25);
+  --color-accent: #0a84ff;
+  --color-success: #30d158;
+  --color-warning: #ffd60a;
+  --color-error: #ff453a;
+
+  /* Vibrancy/Glass Effects */
+  --vibrancy-sidebar: rgba(28, 28, 30, 0.8);
+  --vibrancy-toolbar: rgba(44, 44, 46, 0.72);
+  --backdrop-blur: 20px;
+}
+```
+
+### Typography Scale
+
+```css
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Menlo', monospace;
+
+  --text-xs: 11px;     /* Captions */
+  --text-sm: 13px;     /* Secondary labels */
+  --text-base: 15px;   /* Body text */
+  --text-lg: 17px;     /* Emphasized text */
+  --text-xl: 20px;     /* Headings */
+  --text-2xl: 24px;    /* Large titles */
+}
+```
+
+### Component Patterns
+
+**Glass/Vibrancy Effect:**
+```css
+.sidebar {
+  background: var(--vibrancy-sidebar);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
+}
+```
+
+**Soft Shadows:**
+```css
+.card {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+}
+```
+
+**Smooth Transitions:**
+```css
+.interactive {
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+```
+
+### Design Tokens Location
+
+All design tokens live in `packages/ui-core/src/styles/`:
+- `tokens.css` - CSS custom properties
+- `typography.css` - Font scales and families
+- `components.css` - Component-level styles
+- `animations.css` - Transition and animation presets
+
+---
+
+## Electron Security Patterns
+
+### Context Isolation (REQUIRED)
+
+All Electron apps MUST use context isolation with a preload script:
+
+```typescript
+// main/index.ts
+const mainWindow = new BrowserWindow({
+  webPreferences: {
+    contextIsolation: true,    // REQUIRED
+    nodeIntegration: false,    // REQUIRED
+    preload: path.join(__dirname, 'preload.js'),
+  },
+});
+```
+
+### IPC Channel Validation
+
+**Preload script MUST whitelist valid channels:**
+
+```typescript
+// preload/index.ts
+const VALID_CHANNELS = [
+  'pty:spawn',
+  'pty:write',
+  'pty:resize',
+  'pty:kill',
+  'fs:readDir',
+  'fs:readFile',
+  'fs:writeFile',
+  'app:getVersion',
+] as const;
+
+contextBridge.exposeInMainWorld('electron', {
+  invoke: (channel: string, ...args: unknown[]) => {
+    if (!VALID_CHANNELS.includes(channel as any)) {
+      throw new Error(`Invalid IPC channel: ${channel}`);
+    }
+    return ipcRenderer.invoke(channel, ...args);
+  },
+});
+```
+
+### Main Process IPC Handlers
+
+```typescript
+// main/ipc.ts
+import { ipcMain } from 'electron';
+import { PTYManager } from '@termai/pty-service';
+
+const ptyManager = new PTYManager();
+
+ipcMain.handle('pty:spawn', async (event, shell, args, options) => {
+  // Validate inputs before spawning
+  const session = await ptyManager.spawn(shell, args, options);
+  return session.id;
+});
+
+ipcMain.handle('pty:write', async (event, sessionId, data) => {
+  ptyManager.write(sessionId, data);
+});
+```
+
+---
+
+## Development Commands (Updated)
+
+### Monorepo Commands (pnpm)
+
+```bash
+# Install all workspace dependencies
+pnpm install
+
+# Build all packages
+pnpm build
+
+# Run specific app
+pnpm --filter @termai/electron dev
+pnpm --filter @termai/web dev
+
+# Run both apps in parallel
+pnpm dev:all
+
+# Type-check entire monorepo
+pnpm typecheck
+
+# Lint entire monorepo
+pnpm lint
+
+# Build specific package
+pnpm --filter @termai/pty-service build
+```
+
+### Legacy Commands (npm - still supported)
+
+```bash
+npm run install:all      # Install frontend + server dependencies
+npm run dev:all          # Run frontend (5173) + backend (3001) together
+npm run dev              # Frontend only
+npm run dev:server       # Backend only
+npm run build            # tsc + vite build
+```
+
+---
+
+## Migration Status
+
+### Phase Checklist
+
+- [ ] **Phase 1**: Monorepo Structure (pnpm-workspace.yaml, packages/, apps/)
+- [ ] **Phase 2**: PTY Service Package (@termai/pty-service)
+- [ ] **Phase 3**: UI Core Package (@termai/ui-core, useSystem hook)
+- [ ] **Phase 4**: Apple Design System CSS
+- [ ] **Phase 5**: Electron Application
+- [ ] **Phase 6**: Web Server Fallback
+- [ ] **Phase 7**: Integration & Validation
+
+### Zero-Stall Requirement
+
+**CRITICAL**: The app MUST remain functional throughout migration:
+- Current web mode must work at all times
+- No breaking changes to existing APIs until abstraction layer is complete
+- Each phase must have a working checkpoint

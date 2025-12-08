@@ -44,6 +44,9 @@ const knowledgeRoutes = require("./routes/knowledge");
 const promptsRoutes = require("./routes/prompts");
 const flowsRoutes = require("./routes/flows");
 const ingestionRoutes = require("./routes/ingestion");
+const contextRoutes = require("./routes/context");
+const frameworksRoutes = require("./routes/frameworks");
+const ptyRoutes = require("./routes/pty");
 
 // Import Knowledge Engine
 const { startWatcher, getKnowledgeEngine } = require("./services/KnowledgeEngine");
@@ -233,6 +236,9 @@ app.use("/api/knowledge", knowledgeRoutes);
 app.use("/api/prompts", promptsRoutes);
 app.use("/api/flows", flowsRoutes);
 app.use("/api/ingestion", ingestionRoutes);
+app.use("/api/context", contextRoutes);
+app.use("/api/frameworks", frameworksRoutes);
+app.use("/api/pty", ptyRoutes);
 
 // ===========================================
 // Process Management
@@ -884,6 +890,7 @@ server.listen(config.port, config.host, async () => {
 ║    GET  /api/health       - Health check                 ║
 ║    POST /api/knowledge/*  - Knowledge base & RAG         ║
 ║    POST /api/ingestion/*  - Conversation import          ║
+║    POST /api/pty/*        - PTY management (REST+SSE)    ║
 ║                                                           ║
 ║  Security:                                                ║
 ║    - CORS: ${config.corsOrigins.join(", ").substring(0, 35)}...
@@ -981,3 +988,36 @@ server.listen(config.port, config.host, async () => {
     console.warn('[IngestionService] Failed to initialize:', error.message);
   }
 });
+
+// ===========================================
+// Graceful Shutdown
+// ===========================================
+
+function gracefulShutdown(signal) {
+  console.log(`\n[Server] Received ${signal}, shutting down gracefully...`);
+
+  // Close HTTP server
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+
+    // Cleanup PTY sessions
+    try {
+      const { cleanup } = require('./routes/pty');
+      cleanup();
+    } catch (e) {
+      console.warn('[Server] PTY cleanup error:', e.message);
+    }
+
+    console.log('[Server] Shutdown complete');
+    process.exit(0);
+  });
+
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error('[Server] Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

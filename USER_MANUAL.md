@@ -17,9 +17,10 @@ Welcome to **TermAI**, your AI-powered terminal assistant. This manual provides 
    - [Knowledge Engine (RAG)](#knowledge-engine-rag)
    - [Conversation Import](#conversation-import)
    - [Flow Editor](#flow-editor)
-5. [Configuration](#5-configuration)
-6. [Keyboard Shortcuts](#6-keyboard-shortcuts)
-7. [Troubleshooting](#7-troubleshooting)
+5. [Performance & Reliability](#5-performance--reliability)
+6. [Configuration](#6-configuration)
+7. [Keyboard Shortcuts](#7-keyboard-shortcuts)
+8. [Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -191,7 +192,43 @@ Click **Flows** in the sidebar to access the Visual Flow Editor.
 
 ---
 
-## 5. Configuration
+## 5. Performance & Reliability
+
+TermAI is built with performance and reliability in mind, implementing industry-standard patterns for a smooth experience.
+
+### Error Recovery
+
+If something goes wrong in the Terminal or AI Panel, TermAI will:
+*   **Catch the error gracefully** instead of crashing the entire application
+*   **Display a friendly error message** explaining what happened
+*   **Provide a "Reload" button** to recover without refreshing the page
+*   **Preserve your session data** so you don't lose your work
+
+### Virtualized Terminal Output
+
+For long terminal sessions with many commands:
+*   **Automatic virtualization** kicks in when you have more than 20 command blocks
+*   **Only visible blocks are rendered** in the DOM, keeping memory usage low
+*   **Smooth scrolling** even with hundreds of commands in history
+*   **No performance degradation** over extended usage sessions
+
+### Responsive Resizing
+
+The split-panel layout features:
+*   **Debounced resize operations** (60fps) for smooth dragging
+*   **Automatic terminal adjustment** when panels are resized
+*   **Persistent layout preferences** saved to localStorage
+
+### Storage Management
+
+TermAI handles browser storage limits gracefully:
+*   **Progressive pruning** of chat history when storage is full
+*   **Automatic cleanup** of old sessions to make room for new ones
+*   **Quota-safe operations** that won't crash on Safari's smaller storage limits
+
+---
+
+## 6. Configuration
 
 Access the **Settings** menu from the left sidebar.
 
@@ -203,7 +240,7 @@ Access the **Settings** menu from the left sidebar.
 
 ---
 
-## 6. Keyboard Shortcuts
+## 7. Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
@@ -215,7 +252,7 @@ Access the **Settings** menu from the left sidebar.
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 *   **"Unable to connect to server":**
     *   Ensure the backend is running (`npm run dev:server` or `./startup.sh`).

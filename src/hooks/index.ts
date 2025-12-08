@@ -53,3 +53,28 @@ export type {
   UseErrorAnalysisConfig,
   UseErrorAnalysisReturn,
 } from "./useErrorAnalysis";
+
+// RAPID Framework hooks
+export { useSmartContext, useContextDisplay } from "./useSmartContext";
+export type {
+  ContextSummary,
+  ContextSummaryItem,
+  ContextGap,
+  IntentClassification,
+  ResponseStrategy,
+  StrategyData,
+  UseSmartContextOptions,
+  UseSmartContextResult,
+} from "./useSmartContext";
+
+// Thinking Frameworks hooks
+export {
+  useThinkingFramework,
+  getFrameworkColor,
+  getFrameworkIcon,
+  formatFrameworkName,
+} from "./useThinkingFramework";
+export type {
+  UseThinkingFrameworkOptions,
+  UseThinkingFrameworkResult,
+} from "./useThinkingFramework";

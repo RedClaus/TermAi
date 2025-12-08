@@ -95,9 +95,10 @@ router.delete("/delete-key", strictRateLimiter, (req, res) => {
 /**
  * POST /api/llm/chat
  * Unified chat endpoint for all providers
+ * Supports streaming responses via SSE when stream=true
  */
 router.post("/chat", strictRateLimiter, async (req, res) => {
-  const { provider, model, messages, systemPrompt } = req.body;
+  const { provider, model, messages, systemPrompt, stream } = req.body;
 
   if (!provider) {
     return res.status(400).json({ error: "Provider is required" });
@@ -106,7 +107,7 @@ router.post("/chat", strictRateLimiter, async (req, res) => {
   const apiKey = getApiKey(provider);
 
   console.log(
-    `[LLM Chat] Provider: ${provider}, Model: ${model}, Has API Key: ${!!apiKey}, Key length: ${apiKey?.length || 0}`,
+    `[LLM Chat] Provider: ${provider}, Model: ${model}, Has API Key: ${!!apiKey}, Stream: ${!!stream}`,
   );
 
   // For Ollama, no API key needed
@@ -116,65 +117,43 @@ router.post("/chat", strictRateLimiter, async (req, res) => {
     });
   }
 
-  try {
-    let response;
+  // Handle streaming responses
+  if (stream) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
 
-    switch (provider) {
-      case "gemini":
-        response = await handleGeminiChat(
-          apiKey,
-          model,
-          messages,
-          systemPrompt,
-        );
-        break;
-      case "openai":
-        response = await handleOpenAIChat(
-          apiKey,
-          model,
-          messages,
-          systemPrompt,
-        );
-        break;
-      case "anthropic":
-        response = await handleAnthropicChat(
-          apiKey,
-          model,
-          messages,
-          systemPrompt,
-        );
-        break;
-      case "xai":
-        response = await handleXAIChat(
-          apiKey,
-          model,
-          messages,
-          systemPrompt,
-        );
-        break;
-      case "openrouter":
-        // OpenRouter uses OpenAI-compatible API
-        response = await handleOpenAIChat(
-          apiKey,
-          model,
-          messages,
-          systemPrompt,
-          "https://openrouter.ai/api/v1"
-        );
-        // Correct provider in response
-        response.provider = "openrouter";
-        break;
-      case "ollama":
-        response = await handleOllamaChat(
-          req.body.endpoint,
-          model,
-          messages,
-          systemPrompt,
-        );
-        break;
-      default:
-        return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    try {
+      switch (provider) {
+        case "anthropic":
+          await handleAnthropicChatStream(apiKey, model, messages, systemPrompt, res, req.body.sessionId);
+          break;
+        case "openai":
+          await handleOpenAIChatStream(apiKey, model, messages, systemPrompt, res, req.body.sessionId);
+          break;
+        case "gemini":
+          await handleGeminiChatStream(apiKey, model, messages, systemPrompt, res, req.body.sessionId);
+          break;
+        default:
+          // Fall back to non-streaming for unsupported providers (ollama, xai, openrouter)
+          res.write(`data: ${JSON.stringify({ type: 'status', status: 'thinking' })}\n\n`);
+          const response = await handleNonStreamingChat(provider, apiKey, model, messages, systemPrompt, req.body.endpoint);
+          res.write(`data: ${JSON.stringify({ type: 'content', content: response.content })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: 'done', provider: response.provider, model: response.model, fullContent: response.content })}\n\n`);
+          res.end();
+      }
+    } catch (error) {
+      console.error(`[LLM Proxy] Stream error with ${provider}:`, error.message);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.end();
     }
+    return;
+  }
+
+  // Non-streaming response (original behavior)
+  try {
+    const response = await handleNonStreamingChat(provider, apiKey, model, messages, systemPrompt, req.body.endpoint);
 
     // Log AI interaction
     const sessionId = req.body.sessionId;
@@ -197,6 +176,30 @@ router.post("/chat", strictRateLimiter, async (req, res) => {
     });
   }
 });
+
+/**
+ * Handle non-streaming chat for any provider
+ */
+async function handleNonStreamingChat(provider, apiKey, model, messages, systemPrompt, endpoint) {
+  switch (provider) {
+    case "gemini":
+      return await handleGeminiChat(apiKey, model, messages, systemPrompt);
+    case "openai":
+      return await handleOpenAIChat(apiKey, model, messages, systemPrompt);
+    case "anthropic":
+      return await handleAnthropicChat(apiKey, model, messages, systemPrompt);
+    case "xai":
+      return await handleXAIChat(apiKey, model, messages, systemPrompt);
+    case "openrouter":
+      const response = await handleOpenAIChat(apiKey, model, messages, systemPrompt, "https://openrouter.ai/api/v1");
+      response.provider = "openrouter";
+      return response;
+    case "ollama":
+      return await handleOllamaChat(endpoint, model, messages, systemPrompt);
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
 
 // ===========================================
 // Provider-Specific Handlers
@@ -397,6 +400,201 @@ async function handleAnthropicChat(apiKey, model, messages, systemPrompt) {
     model: realModel,
     usage: response.usage,
   };
+}
+
+/**
+ * Handle Anthropic chat with streaming
+ */
+async function handleAnthropicChatStream(apiKey, model, messages, systemPrompt, res, sessionId) {
+  const Anthropic = require("@anthropic-ai/sdk");
+
+  const cleanApiKey = apiKey?.trim();
+  const client = new Anthropic({ apiKey: cleanApiKey });
+
+  // Model mapping (same as non-streaming)
+  const modelMap = {
+    "claude-sonnet-4": "claude-sonnet-4-20250514",
+    "claude-3-5-sonnet": "claude-3-5-sonnet-latest",
+    "claude-3-opus": "claude-3-opus-latest",
+    auto: "claude-sonnet-4-20250514",
+  };
+
+  const normalizedModel = model?.trim()?.toLowerCase() || "auto";
+  let realModel = modelMap[normalizedModel];
+
+  if (!realModel) {
+    if (normalizedModel.includes("sonnet-4") || normalizedModel.includes("sonnet4")) {
+      realModel = "claude-sonnet-4-20250514";
+    } else if (normalizedModel.includes("3-5-sonnet") || normalizedModel.includes("3.5")) {
+      realModel = "claude-3-5-sonnet-latest";
+    } else if (normalizedModel.includes("opus")) {
+      realModel = "claude-3-opus-latest";
+    } else {
+      realModel = "claude-sonnet-4-20250514";
+    }
+  }
+
+  console.log(`[Anthropic Stream] Model: "${model}" -> Using: "${realModel}"`);
+
+  // Build messages array (Anthropic format)
+  const anthropicMessages = [];
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      anthropicMessages.push({ role: "user", content: msg.content });
+    } else if (msg.role === "ai" || msg.role === "assistant") {
+      anthropicMessages.push({ role: "assistant", content: msg.content });
+    } else if (msg.role === "system") {
+      anthropicMessages.push({
+        role: "user",
+        content: `[System Output]: ${msg.content}`,
+      });
+    }
+  }
+
+  // Send initial status
+  res.write(`data: ${JSON.stringify({ type: 'status', status: 'thinking' })}\n\n`);
+
+  const stream = await client.messages.stream({
+    model: realModel,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: anthropicMessages,
+  });
+
+  let fullContent = '';
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+      const text = event.delta.text;
+      fullContent += text;
+      res.write(`data: ${JSON.stringify({ type: 'content', content: text })}\n\n`);
+    }
+  }
+
+  // Log AI interaction
+  const inputLength = messages?.reduce((sum, m) => sum + (m.content?.length || 0), 0) || 0;
+  const { logAIInteraction } = require("../middleware/logger");
+  logAIInteraction(sessionId, "anthropic", realModel, inputLength, fullContent.length);
+
+  res.write(`data: ${JSON.stringify({ type: 'done', provider: 'anthropic', model: realModel, fullContent })}\n\n`);
+  res.end();
+}
+
+/**
+ * Handle OpenAI chat with streaming
+ */
+async function handleOpenAIChatStream(apiKey, model, messages, systemPrompt, res, sessionId) {
+  const OpenAI = require("openai");
+
+  const client = new OpenAI({ apiKey });
+
+  // Model mapping
+  const modelMap = {
+    "gpt-5-high": "gpt-4o",
+    "gpt-4o": "gpt-4o",
+    auto: "gpt-4o",
+  };
+  const realModel = modelMap[model] || model || "gpt-4o";
+
+  // Build messages array
+  const openaiMessages = [];
+
+  if (systemPrompt) {
+    openaiMessages.push({ role: "system", content: systemPrompt });
+  }
+
+  for (const msg of messages) {
+    if (msg.role === "user" || msg.role === "assistant") {
+      openaiMessages.push({
+        role: msg.role === "ai" ? "assistant" : msg.role,
+        content: msg.content,
+      });
+    } else if (msg.role === "system") {
+      openaiMessages.push({
+        role: "user",
+        content: `[System]: ${msg.content}`,
+      });
+    }
+  }
+
+  // Send initial status
+  res.write(`data: ${JSON.stringify({ type: 'status', status: 'thinking' })}\n\n`);
+
+  const stream = await client.chat.completions.create({
+    model: realModel,
+    messages: openaiMessages,
+    stream: true,
+  });
+
+  let fullContent = '';
+
+  for await (const chunk of stream) {
+    const text = chunk.choices[0]?.delta?.content || '';
+    if (text) {
+      fullContent += text;
+      res.write(`data: ${JSON.stringify({ type: 'content', content: text })}\n\n`);
+    }
+  }
+
+  // Log AI interaction
+  const inputLength = messages?.reduce((sum, m) => sum + (m.content?.length || 0), 0) || 0;
+  const { logAIInteraction } = require("../middleware/logger");
+  logAIInteraction(sessionId, "openai", realModel, inputLength, fullContent.length);
+
+  res.write(`data: ${JSON.stringify({ type: 'done', provider: 'openai', model: realModel, fullContent })}\n\n`);
+  res.end();
+}
+
+/**
+ * Handle Gemini chat with streaming
+ */
+async function handleGeminiChatStream(apiKey, model, messages, systemPrompt, res, sessionId) {
+  const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  // Model mapping
+  const modelMap = {
+    "gemini-1-5-pro": "gemini-1.5-pro",
+    "gemini-1-5-pro-002": "gemini-1.5-pro-002",
+    "gemini-1-5-flash": "gemini-1.5-flash",
+    "gemini-1-5-flash-002": "gemini-1.5-flash-002",
+    "gemini-1-5-flash-8b": "gemini-1.5-flash-8b",
+    "gemini-2.0-flash-exp": "gemini-2.0-flash-exp",
+    "gemini-exp-1206": "gemini-exp-1206",
+    auto: "gemini-1.5-pro",
+  };
+  const realModel = modelMap[model] || model || "gemini-1.5-pro";
+
+  const geminiModel = genAI.getGenerativeModel({ model: realModel });
+
+  // Build prompt
+  const context = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+  const prompt = systemPrompt ? `${systemPrompt}\n\nConversation:\n${context}` : context;
+
+  // Send initial status
+  res.write(`data: ${JSON.stringify({ type: 'status', status: 'thinking' })}\n\n`);
+
+  const result = await geminiModel.generateContentStream(prompt);
+
+  let fullContent = '';
+
+  for await (const chunk of result.stream) {
+    const text = chunk.text();
+    if (text) {
+      fullContent += text;
+      res.write(`data: ${JSON.stringify({ type: 'content', content: text })}\n\n`);
+    }
+  }
+
+  // Log AI interaction
+  const inputLength = messages?.reduce((sum, m) => sum + (m.content?.length || 0), 0) || 0;
+  const { logAIInteraction } = require("../middleware/logger");
+  logAIInteraction(sessionId, "gemini", realModel, inputLength, fullContent.length);
+
+  res.write(`data: ${JSON.stringify({ type: 'done', provider: 'gemini', model: realModel, fullContent })}\n\n`);
+  res.end();
 }
 
 /**

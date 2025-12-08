@@ -32,6 +32,13 @@ export interface LLMResponse {
   error?: string;
 }
 
+export interface StreamCallbacks {
+  onStatus?: (status: string) => void;
+  onContent?: (content: string, fullContent: string) => void;
+  onDone?: (response: LLMResponse) => void;
+  onError?: (error: string) => void;
+}
+
 /**
  * Proxy-based LLM Provider
  * Routes all requests through the backend server
@@ -321,6 +328,107 @@ export class LLMManager {
       console.error(`Error fetching models for ${provider}:`, error);
       return [];
     }
+  }
+
+  /**
+   * Stream a chat response with real-time updates
+   * @param provider Provider name
+   * @param modelId Model ID
+   * @param messages Chat messages
+   * @param systemPrompt System prompt
+   * @param callbacks Callback functions for streaming events
+   * @param sessionId Optional session ID
+   * @param endpoint Optional endpoint for Ollama
+   * @returns AbortController to cancel the stream
+   */
+  static streamChat(
+    provider: string,
+    modelId: string,
+    messages: ChatMessage[],
+    systemPrompt: string,
+    callbacks: StreamCallbacks,
+    sessionId?: string,
+    endpoint?: string
+  ): AbortController {
+    const abortController = new AbortController();
+
+    const requestBody = {
+      provider,
+      model: modelId,
+      messages,
+      systemPrompt: systemPrompt || "You are a helpful assistant.",
+      endpoint,
+      sessionId,
+      stream: true,
+    };
+
+    fetch(config.getApiUrl(config.api.llm.chat), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const error = await response.json();
+          callbacks.onError?.(error.error || `Server error: ${response.statusText}`);
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          callbacks.onError?.("No response body");
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let fullContent = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                switch (data.type) {
+                  case "status":
+                    callbacks.onStatus?.(data.status);
+                    break;
+                  case "content":
+                    fullContent += data.content;
+                    callbacks.onContent?.(data.content, fullContent);
+                    break;
+                  case "done":
+                    callbacks.onDone?.({
+                      content: data.fullContent || fullContent,
+                      provider: data.provider,
+                      model: data.model,
+                    });
+                    break;
+                  case "error":
+                    callbacks.onError?.(data.error);
+                    break;
+                }
+              } catch {
+                // Ignore parse errors (e.g., empty lines)
+              }
+            }
+          }
+        }
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          callbacks.onError?.(error.message);
+        }
+      });
+
+    return abortController;
   }
 
   /**

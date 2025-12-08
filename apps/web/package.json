@@ -1,0 +1,21 @@
+{
+  "name": "@termai/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "TermAI Web Server (Express + Socket.IO)",
+  "type": "commonjs",
+  "main": "./index.js",
+  "scripts": {
+    "dev": "node --watch ../../server/index.js",
+    "start": "node ../../server/index.js",
+    "build": "echo 'Web server is JavaScript, no build needed'",
+    "typecheck": "echo 'Web server is CommonJS JavaScript'"
+  },
+  "dependencies": {
+    "@termai/pty-service": "workspace:*",
+    "@termai/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1"
+  }
+}

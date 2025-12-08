@@ -19,10 +19,16 @@ An AI-powered terminal assistant that bridges natural language and command-line 
 
 ### UI/UX
 - **Split Panel Layout**: Terminal on top, AI panel on bottom (both resizable)
-- **Drag-to-Resize**: Adjust panel sizes with the grip handle
+- **Drag-to-Resize**: Adjust panel sizes with the grip handle (60fps debounced)
 - **Light/Dark Themes**: Toggle between themes
 - **Git Branch Display**: Shows current branch in context chips
 - **File Browser**: Browse and navigate filesystem from AI panel
+
+### Performance & Reliability
+- **Error Boundaries**: Graceful error recovery without full page crashes
+- **Virtualized Terminal**: Only visible blocks render when you have 20+ commands
+- **Debounced Resize**: Smooth 60fps panel resizing with ResizeObserver
+- **Storage Management**: Progressive pruning handles browser quota limits
 
 ### Automation
 - **Auto-Run Mode**: Let AI execute command sequences autonomously

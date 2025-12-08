@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": ".",
+    "composite": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node", "electron"]
+  },
+  "include": ["main/**/*.ts", "preload/**/*.ts", "preload/**/*.tsx", "renderer/**/*.ts", "renderer/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "out", "preload/example.tsx"],
+  "references": [
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/pty-service" },
+    { "path": "../../packages/ui-core" }
+  ]
+}

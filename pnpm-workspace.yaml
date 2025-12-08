@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+  - apps/*
+
+enablePrePostScripts: true
+
+ignoredBuiltDependencies:
+  - electron
+  - esbuild
+  - node-pty

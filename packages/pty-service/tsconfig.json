@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "lib": ["ES2022"],
+    "types": ["node"],
+
+    // Override bundler mode for Node.js package
+    "moduleResolution": "node",
+
+    // Ensure compilation output is enabled
+    "noEmit": false,
+    "declaration": true,
+
+    // Allow type-only re-exports
+    "isolatedModules": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "../shared-types" }
+  ]
+}

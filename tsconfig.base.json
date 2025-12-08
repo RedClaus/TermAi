@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // Language & Build
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+
+    // Output
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    // Strict Type-Checking
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Interop
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+
+    // Bundler Mode (for packages used with Vite)
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "isolatedModules": true,
+
+    // Path Aliases (for workspace packages)
+    "baseUrl": ".",
+    "paths": {
+      "@termai/shared-types": ["./packages/shared-types/src/index.ts"],
+      "@termai/shared-types/*": ["./packages/shared-types/src/*"],
+      "@termai/pty-service": ["./packages/pty-service/src/index.ts"],
+      "@termai/pty-service/*": ["./packages/pty-service/src/*"],
+      "@termai/ui-core": ["./packages/ui-core/src/index.ts"],
+      "@termai/ui-core/*": ["./packages/ui-core/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "build", "out"]
+}

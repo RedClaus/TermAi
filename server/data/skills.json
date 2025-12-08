@@ -70,5 +70,29 @@
         "action": "go build . or go run . to build/run Go applications"
       }
     ]
+  },
+  {
+    "id": "a91f2e71-634f-471b-ab55-53de7b8237b9",
+    "timestamp": 1765167306006,
+    "use_when": "Starting a Python Flask web application with environment variables",
+    "preferences": "prefers using environment variables for configuration",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "HOST=host_ip PORT=port_num python3 main.py"
+      }
+    ]
+  },
+  {
+    "id": "fa7b1854-c78b-4cc8-9d05-eeecf80f49c9",
+    "timestamp": 1765200983612,
+    "use_when": "Starting a Python web application with environment variables",
+    "preferences": "prefers setting environment variables inline with command execution",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "HOST=value PORT=value VARIABLE=value python3 src/main.py"
+      }
+    ]
   }
 ]

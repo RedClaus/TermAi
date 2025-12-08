@@ -22,9 +22,22 @@
       "Bash(ls:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pkill:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(pnpm:*)",
+      "Bash(xargs kill:*)",
+      "Bash(fuser:*)",
+      "Bash(ss:*)",
+      "Bash(chmod:*)",
+      "Bash(out/TermAI-0.1.0.AppImage --version)",
+      "Bash(./out/linux-unpacked/@termaielectron --help)",
+      "Bash(./out/linux-unpacked/@termaielectron:*)",
+      "Bash(ollama pull:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "outputStyle": "Explanatory"
 }

@@ -108,42 +108,71 @@ class KnowledgeEngine {
       this.isBinaryPath = isBinaryPath;
 
       // 3. Initialize Embeddings based on configuration
-      // Logic: Prefer OpenAI if key available, otherwise Ollama
-      let useOpenAI = this.config.provider === 'openai';
-      let openAIKey = this.config.apiKey;
+      // Logic: Prefer Ollama (local, free), fall back to OpenAI if Ollama unavailable
+      let useOllama = true;
+      let ollamaAvailable = false;
 
-      // Fallback: Check global OpenAI key if not explicitly using OpenAI
-      if (!useOpenAI) {
-        const { getApiKey } = require('../config');
-        const globalKey = getApiKey('openai') || process.env.OPENAI_API_KEY;
-        if (globalKey) {
-          useOpenAI = true;
-          openAIKey = globalKey;
-          console.log('[KnowledgeEngine] Using OpenAI fallback for embeddings');
+      // Check if Ollama is running and has the embedding model
+      try {
+        const ollamaCheck = await fetch(`${this.config.ollamaEndpoint || OLLAMA_BASE_URL}/api/tags`);
+        if (ollamaCheck.ok) {
+          const ollamaData = await ollamaCheck.json();
+          const hasEmbedModel = ollamaData.models?.some(m => m.name.includes('nomic-embed'));
+          if (hasEmbedModel) {
+            ollamaAvailable = true;
+            console.log('[KnowledgeEngine] Ollama available with embedding model');
+          } else {
+            console.log('[KnowledgeEngine] Ollama running but no embedding model found');
+          }
         }
+      } catch (e) {
+        console.log('[KnowledgeEngine] Ollama not available:', e.message);
+        useOllama = false;
       }
 
-      if (useOpenAI && openAIKey) {
-        console.log('[KnowledgeEngine] Using OpenAI Embeddings');
-        const openai = new OpenAI({ apiKey: openAIKey });
-        this.embeddings = {
-          embedQuery: async (text) => {
-            const response = await openai.embeddings.create({
-              model: OPENAI_EMBEDDING_MODEL,
-              input: text,
-            });
-            return response.data[0].embedding;
-          }
-        };
-        this.config.embeddingProvider = 'openai';
-      } else {
-        // Default to Ollama
-        console.log('[KnowledgeEngine] Using Ollama Embeddings');
+      // Explicit provider override
+      if (this.config.provider === 'openai') {
+        useOllama = false;
+      } else if (this.config.provider === 'ollama') {
+        useOllama = true;
+      }
+
+      if (useOllama && ollamaAvailable) {
+        console.log('[KnowledgeEngine] Using Ollama Embeddings (local)');
         this.embeddings = new OllamaEmbeddings({
           model: OLLAMA_MODEL,
           baseUrl: this.config.ollamaEndpoint || OLLAMA_BASE_URL,
         });
         this.config.embeddingProvider = 'ollama';
+      } else {
+        // Fall back to OpenAI
+        const { getApiKey } = require('../config');
+        const openAIKey = this.config.apiKey || getApiKey('openai') || process.env.OPENAI_API_KEY;
+
+        if (openAIKey) {
+          console.log('[KnowledgeEngine] Using OpenAI Embeddings (fallback)');
+          const openai = new OpenAI({ apiKey: openAIKey });
+          this.embeddings = {
+            embedQuery: async (text) => {
+              try {
+                const response = await openai.embeddings.create({
+                  model: OPENAI_EMBEDDING_MODEL,
+                  input: text,
+                });
+                return response.data[0].embedding;
+              } catch (err) {
+                // If OpenAI embeddings fail (403, rate limit, etc.), log and return null
+                console.error('[KnowledgeEngine] OpenAI embedding error:', err.message);
+                return null;
+              }
+            }
+          };
+          this.config.embeddingProvider = 'openai';
+        } else {
+          console.warn('[KnowledgeEngine] No embedding provider available - semantic search disabled');
+          this.embeddings = null;
+          this.config.embeddingProvider = 'none';
+        }
       }
 
       // 4. Initialize Splitter

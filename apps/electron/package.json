@@ -1,0 +1,103 @@
+{
+  "name": "@termai/electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TermAI - AI-Powered Terminal Assistant",
+  "author": {
+    "name": "Norman King",
+    "email": "norman@example.com"
+  },
+  "homepage": "https://github.com/normanking/termai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/normanking/termai.git"
+  },
+  "type": "module",
+  "main": "./dist/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist out",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.termai.desktop",
+    "productName": "TermAI",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "./dist/main/index.js"
+    },
+    "npmRebuild": true,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Development",
+      "icon": "build/icons",
+      "synopsis": "AI-Powered Terminal Assistant",
+      "description": "TermAI is an intelligent terminal assistant with multi-AI provider support, skill learning, and visual workflow automation."
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icons/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ]
+  }
+}

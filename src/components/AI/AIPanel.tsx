@@ -28,11 +28,13 @@ import {
   EyeOff,
   Sparkles,
   ChevronsRight,
+  Brain,
 } from "lucide-react";
-import styles from "./AIPanel.module.css";
+// import styles from "./AIPanel.module.css"; // Unused - using Tailwind classes
 
 // Services
 import { LLMManager } from "../../services/LLMManager";
+import type { ChatMessage as LLMChatMessage } from "../../services/LLMManager";
 import { SessionManager } from "../../services/SessionManager";
 import { KnowledgeService } from "../../services/KnowledgeService";
 import { buildSystemPrompt } from "../../utils/promptBuilder";
@@ -57,6 +59,7 @@ import {
 import { useWidgetContext } from "../../hooks/useWidgetContext";
 import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import { useErrorAnalysis } from "../../hooks/useErrorAnalysis";
+import { useThinkingFramework } from "../../hooks/useThinkingFramework";
 
 // Components
 import { ModelSelector } from "./ModelSelector";
@@ -69,6 +72,8 @@ import { TaskCompletionSummary } from "./TaskCompletionSummary";
 import { ErrorFixSuggestion } from "./ErrorFixSuggestion";
 import { LearnSkillDialog } from "./LearnSkillDialog";
 import { TypingIndicator } from "../common";
+import { ThinkingDisplay } from "./ThinkingDisplay";
+import { AIStatusBadge, deriveAIState } from "./AIStatusBadge";
 
 // Types
 import type { ProviderType } from "../../types";
@@ -76,6 +81,8 @@ import type { ModelSpec } from "../../data/models";
 import type {
   CommandFinishedPayload,
   CommandStartedPayload,
+  ThinkingStartedPayload,
+  ThinkingCompletePayload,
 } from "../../events/types";
 
 interface AIPanelProps {
@@ -93,8 +100,6 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   isEmbedded,
   isActive = true,
 }) => {
-  // DEBUG: Log component mount and props
-  console.log('[AIPanel] Component rendering with props:', { isOpen, sessionId, isEmbedded, isActive });
   // =============================================
   // Local State (panel-specific)
   // =============================================
@@ -115,6 +120,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   const [showLearnSkill, setShowLearnSkill] = useState(false);
   const [learnSkillCommand, setLearnSkillCommand] = useState<string | null>(null);
   const [learnSkillOutput, setLearnSkillOutput] = useState<string | undefined>(undefined);
+
+  // Thinking framework display state
+  const [showThinkingDisplay, setShowThinkingDisplay] = useState(true);
 
 
   // =============================================
@@ -205,6 +213,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   // Auto-retry timeout ref
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Streaming state
+  const [streamingContent, setStreamingContent] = useState("");
+  const streamAbortRef = useRef<AbortController | null>(null);
+
   // =============================================
   // Safety Check Hook
   // =============================================
@@ -235,6 +247,22 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     sessionId,
     cwd: currentCwd,
     modelId: selectedModelId,
+  });
+
+  // =============================================
+  // Thinking Framework Hook
+  // =============================================
+  const {
+    state: thinkingState,
+    isActive: thinkingIsActive,
+    isPaused: thinkingIsPaused,
+    currentPhase: thinkingCurrentPhase,
+    steps: thinkingSteps,
+    pauseFramework,
+    resumeFramework,
+  } = useThinkingFramework({
+    sessionId: sessionId || "default",
+    enabled: isActive,
   });
 
   // =============================================
@@ -578,6 +606,37 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   );
 
   // =============================================
+  // Thinking Framework Event Handlers
+  // =============================================
+
+  // Show thinking display when a framework starts
+  useTermAiEvent(
+    "termai-thinking-started",
+    useCallback(
+      (payload: ThinkingStartedPayload) => {
+        if (payload.sessionId === sessionId || payload.sessionId === "default") {
+          setShowThinkingDisplay(true);
+          setAgentStatus(`Using ${payload.framework} framework...`);
+        }
+      },
+      [sessionId, setAgentStatus]
+    )
+  );
+
+  // Update status when framework completes
+  useTermAiEvent(
+    "termai-thinking-complete",
+    useCallback(
+      (payload: ThinkingCompletePayload) => {
+        if (payload.sessionId === sessionId || payload.sessionId === "default") {
+          setAgentStatus(null);
+        }
+      },
+      [sessionId, setAgentStatus]
+    )
+  );
+
+  // =============================================
   // Auto-Retry on Stall (debounced)
   // =============================================
   useEffect(() => {
@@ -718,6 +777,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     clearInput();
     setIsLoading(true);
+    setStreamingContent("");
     setAgentStatus("Thinking...");
 
     if (sessionId) {
@@ -731,14 +791,6 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
     try {
       const providerType = localStorage.getItem("termai_provider") || "gemini";
-      const debugModel = models.find(m => m.id === selectedModelId);
-      console.log('[AIPanel.handleSend] localStorage provider:', providerType);
-      console.log('[AIPanel.handleSend] selectedModelId:', selectedModelId);
-      console.log('[AIPanel.handleSend] model from list:', debugModel?.provider, debugModel?.name);
-      console.log('[AIPanel.handleSend] All localStorage termai keys:', 
-        Object.keys(localStorage).filter(k => k.startsWith('termai_')).map(k => `${k}=${localStorage.getItem(k)}`).join(', ')
-      );
-      const llm = LLMManager.getProvider(providerType, apiKey, selectedModelId);
 
       // Fetch relevant skills
       const learnedSkills = await KnowledgeService.searchSkills(userMsg);
@@ -754,10 +806,14 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             )}`
           : "";
 
-      const context =
-        messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
-        skillsContext +
-        `\nUser: ${userMsg}`;
+      // Build messages array for streaming API
+      const chatMessages: LLMChatMessage[] = [
+        ...messages.map((m) => ({
+          role: m.role as "user" | "ai" | "system",
+          content: m.content,
+        })),
+        { role: "user" as const, content: userMsg + skillsContext },
+      ];
 
       const selectedModel = models.find((m) => m.id === selectedModelId);
       const useLiteMode = selectedModel
@@ -769,14 +825,53 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         isAutoRun,
         isLiteMode: useLiteMode,
       });
-      const response = await llm.chat(systemPrompt, context, sessionId);
 
-      setMessages((prev) => [...prev, { role: "ai", content: response }]);
-      setAgentStatus(null);
+      // Get Ollama endpoint if needed
+      const endpoint = providerType === "ollama"
+        ? localStorage.getItem("termai_ollama_endpoint") || config.defaultOllamaEndpoint
+        : undefined;
 
-      if (isAutoRun) {
-        processAutoRunResponse(response);
-      }
+      // Use streaming API
+      streamAbortRef.current = LLMManager.streamChat(
+        providerType,
+        selectedModelId,
+        chatMessages,
+        systemPrompt,
+        {
+          onStatus: (status) => {
+            setAgentStatus(status === "thinking" ? "Generating response..." : status);
+          },
+          onContent: (_chunk, fullContent) => {
+            setStreamingContent(fullContent);
+          },
+          onDone: (response) => {
+            setStreamingContent("");
+            setMessages((prev) => [...prev, { role: "ai", content: response.content }]);
+            setAgentStatus(null);
+            setIsLoading(false);
+
+            if (isAutoRun) {
+              processAutoRunResponse(response.content);
+            }
+          },
+          onError: (error) => {
+            console.error("LLM Stream Error:", error);
+            let errorMsg = "Sorry, something went wrong.";
+            errorMsg += ` Error: ${error}`;
+            if (providerType !== "ollama") {
+              errorMsg += " Please check your API key in Settings.";
+            } else {
+              errorMsg += " Please check your Ollama endpoint and ensure the model is installed.";
+            }
+            setMessages((prev) => [...prev, { role: "ai", content: errorMsg }]);
+            setStreamingContent("");
+            setIsLoading(false);
+            setAgentStatus(null);
+          },
+        },
+        sessionId,
+        endpoint
+      );
     } catch (error: unknown) {
       console.error("LLM Error:", error);
       let errorMsg = "Sorry, something went wrong.";
@@ -790,7 +885,6 @@ export const AIPanel: React.FC<AIPanelProps> = ({
           " Please check your Ollama endpoint and ensure the model is installed.";
       }
       setMessages((prev) => [...prev, { role: "ai", content: errorMsg }]);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -878,6 +972,21 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
       {/* Content */}
       <div className="flex-1 p-6 overflow-y-auto z-[100] flex flex-col gap-4 scrollbar-hide">
+        {/* Thinking Framework Display */}
+        {showThinkingDisplay && thinkingState && (
+          <ThinkingDisplay
+            framework={thinkingState.framework}
+            state={thinkingState}
+            steps={thinkingSteps}
+            currentPhase={thinkingCurrentPhase}
+            isActive={thinkingIsActive}
+            isPaused={thinkingIsPaused}
+            onPause={pauseFramework}
+            onResume={resumeFramework}
+            onCollapse={() => setShowThinkingDisplay(false)}
+          />
+        )}
+
         {isCheckingKey ? (
           <div className="p-4 rounded-lg text-[15px] leading-[1.6] bg-[#1a1a1a] text-gray-300 border border-gray-800 self-start max-w-[90%]">
             <div className="flex items-center gap-3">
@@ -905,22 +1014,32 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         )}
 
         {/* Agent Status */}
-        {agentStatus && !pendingCommand && (
+        {agentStatus && !pendingCommand && !streamingContent && (
           <div
             className={`
               rounded-lg p-4 my-2 flex items-center gap-3 text-[14px] text-gray-200
-              ${actualNeedsAttention 
-                ? 'bg-purple-500/10 border-2 border-purple-400/40 animate-pulse flex-wrap justify-between' 
-                : 'bg-[#1a1a1a] border border-gray-800'
+              ${actualNeedsAttention
+                ? 'bg-purple-500/10 border-2 border-purple-400/40 animate-pulse flex-wrap justify-between'
+                : 'bg-gradient-to-r from-purple-500/10 to-cyan-500/10 border border-purple-400/30'
               }
             `}
           >
             {actualNeedsAttention ? (
               <span className="text-lg">👆</span>
             ) : (
-              <Loader size={16} className="animate-spin text-purple-500" />
+              <div className="relative">
+                <Loader size={20} className="animate-spin text-purple-400" />
+                <div className="absolute inset-0 animate-ping">
+                  <Sparkles size={20} className="text-purple-400 opacity-30" />
+                </div>
+              </div>
             )}
-            <span>{agentStatus}</span>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">{agentStatus}</span>
+              {!actualNeedsAttention && (
+                <span className="text-xs text-gray-500">AI is processing your request...</span>
+              )}
+            </div>
             {actualNeedsAttention && (
               <span className="inline-flex items-center gap-2 bg-purple-500 text-white text-xs font-semibold px-3 py-1.5 rounded">
                 Input Required
@@ -948,8 +1067,22 @@ export const AIPanel: React.FC<AIPanelProps> = ({
           />
         )}
 
+        {/* Streaming Response */}
+        {streamingContent && (
+          <div className="p-4 rounded-lg text-[15px] leading-[1.6] bg-[#1a1a1a] text-gray-300 border border-purple-400/30 self-start max-w-[90%]">
+            <div className="flex items-center gap-2 mb-2 text-purple-400 text-xs">
+              <Loader size={12} className="animate-spin" />
+              <span>Generating...</span>
+            </div>
+            <div className="whitespace-pre-wrap break-words font-mono text-[13px]">
+              {streamingContent}
+              <span className="animate-pulse">▊</span>
+            </div>
+          </div>
+        )}
+
         {/* Loading */}
-        {isLoading && !agentStatus && (
+        {isLoading && !agentStatus && !streamingContent && (
           <div className="p-4 rounded-lg text-[15px] leading-[1.6] bg-[#1a1a1a] text-gray-300 border border-gray-800 self-start max-w-[90%]">
             <TypingIndicator label="Thinking" size="sm" />
           </div>
@@ -959,17 +1092,27 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       </div>
 
       {/* Input Area */}
-      {console.log('[AIPanel] hasKey value:', hasKey, '- Input Area will render:', !!hasKey)}
       {hasKey && (
         <div className="p-6 bg-[#0d0d0d]">
-          {console.log('[AIPanel] INSIDE hasKey block - rendering input area')}
-          {/* DEBUG: This should be visible */}
-          <div className="bg-red-500 text-white p-4 mb-4 rounded font-bold text-xl">
-            DEBUG: Action Toolbar should appear below (hasKey={String(hasKey)})
-          </div>
           {/* Action Toolbar - Above input box */}
           <div className="flex justify-between items-center p-3 bg-purple-900/50 border-2 border-purple-500 rounded-lg mb-3 gap-3">
             <div className="flex items-center gap-2">
+              {/* AI Status Badge - Always visible */}
+              <AIStatusBadge
+                state={deriveAIState({
+                  isLoading,
+                  agentStatus,
+                  streamingContent,
+                  isAutoRun,
+                  consecutiveStalls,
+                })}
+                isAutoRun={isAutoRun}
+                stepCount={autoRunCount}
+                maxSteps={MAX_AUTO_STEPS}
+                stallCount={consecutiveStalls}
+                maxStalls={MAX_STALLS_BEFORE_ASK}
+                currentCommand={agentStatus?.includes("Terminal:") || agentStatus?.includes("Coding:") ? agentStatus : undefined}
+              />
               <button
                 className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0d0d0d] border border-gray-700 rounded-md text-gray-400 text-sm cursor-pointer transition-all hover:bg-[#141414] hover:text-purple-400 hover:border-purple-400"
                 type="button"
@@ -1040,6 +1183,17 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                 ) : (
                   <GraduationCap size={16} />
                 )}
+              </button>
+              {/* Thinking Framework Toggle */}
+              <button
+                onClick={() => setShowThinkingDisplay(!showThinkingDisplay)}
+                className={`p-1.5 rounded-md cursor-pointer transition-all ${
+                  showThinkingDisplay && thinkingState ? 'text-cyan-400' : 'text-gray-500'
+                } hover:bg-[#1a1a1a] hover:text-cyan-400`}
+                type="button"
+                title={showThinkingDisplay ? "Hide thinking display" : "Show thinking display"}
+              >
+                <Brain size={16} />
               </button>
             </div>
           </div>

@@ -48,6 +48,14 @@ export const config = {
       end: "/api/session/end",
       logs: "/api/session/logs",
     },
+    context: {
+      gather: "/api/context/gather",
+      recordCommand: "/api/context/record-command",
+      classify: "/api/context/classify",
+      strategy: "/api/context/strategy",
+      summary: "/api/context/summary",
+      lastError: "/api/context/last-error",
+    },
   },
 
   // Build full URL helper

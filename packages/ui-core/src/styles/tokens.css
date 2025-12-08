@@ -1,0 +1,237 @@
+/**
+ * Apple Design System - Design Tokens
+ * CSS Custom Properties following Apple Human Interface Guidelines
+ * Dark mode optimized for macOS-style interfaces
+ */
+
+:root {
+  /* ============================================
+     Background Colors
+     ============================================ */
+
+  /* Primary backgrounds - main content areas */
+  --bg-primary: #1c1c1e;
+  --bg-primary-rgb: 28, 28, 30;
+
+  /* Secondary backgrounds - grouped content, sidebars */
+  --bg-secondary: #2c2c2e;
+  --bg-secondary-rgb: 44, 44, 46;
+
+  /* Tertiary backgrounds - grouped backgrounds within secondary */
+  --bg-tertiary: #3a3a3c;
+  --bg-tertiary-rgb: 58, 58, 60;
+
+  /* Elevated surfaces - popovers, menus, cards */
+  --bg-elevated: #2c2c2e;
+  --bg-elevated-rgb: 44, 44, 46;
+
+  /* ============================================
+     Text Colors
+     ============================================ */
+
+  /* Primary text - main content */
+  --text-primary: rgba(255, 255, 255, 0.92);
+
+  /* Secondary text - labels, descriptions */
+  --text-secondary: rgba(255, 255, 255, 0.55);
+
+  /* Tertiary text - placeholder, disabled */
+  --text-tertiary: rgba(255, 255, 255, 0.25);
+
+  /* Quaternary text - very subtle text */
+  --text-quaternary: rgba(255, 255, 255, 0.18);
+
+  /* ============================================
+     Accent Colors
+     ============================================ */
+
+  /* Blue - primary action, links */
+  --accent-blue: #0a84ff;
+  --accent-blue-rgb: 10, 132, 255;
+  --accent-blue-hover: #409cff;
+  --accent-blue-active: #0077ed;
+
+  /* Green - success, positive actions */
+  --accent-green: #30d158;
+  --accent-green-rgb: 48, 209, 88;
+  --accent-green-hover: #32d95a;
+  --accent-green-active: #2ac04e;
+
+  /* Yellow - warnings, attention */
+  --accent-yellow: #ffd60a;
+  --accent-yellow-rgb: 255, 214, 10;
+  --accent-yellow-hover: #ffd426;
+  --accent-yellow-active: #f7ce00;
+
+  /* Orange - moderate warnings */
+  --accent-orange: #ff9f0a;
+  --accent-orange-rgb: 255, 159, 10;
+  --accent-orange-hover: #ffb340;
+  --accent-orange-active: #ff9500;
+
+  /* Red - errors, destructive actions */
+  --accent-red: #ff453a;
+  --accent-red-rgb: 255, 69, 58;
+  --accent-red-hover: #ff5b50;
+  --accent-red-active: #ff3b30;
+
+  /* Purple - creative, premium features */
+  --accent-purple: #bf5af2;
+  --accent-purple-rgb: 191, 90, 242;
+  --accent-purple-hover: #c77ff5;
+  --accent-purple-active: #b44fe8;
+
+  /* Pink - highlights, favorites */
+  --accent-pink: #ff375f;
+  --accent-pink-rgb: 255, 55, 95;
+  --accent-pink-hover: #ff5d7d;
+  --accent-pink-active: #ff2d55;
+
+  /* ============================================
+     Vibrancy & Translucency
+     ============================================ */
+
+  /* Sidebar vibrancy with blur effect */
+  --vibrancy-sidebar: rgba(28, 28, 30, 0.8);
+  --vibrancy-sidebar-rgb: 28, 28, 30;
+
+  /* Toolbar vibrancy */
+  --vibrancy-toolbar: rgba(44, 44, 46, 0.72);
+  --vibrancy-toolbar-rgb: 44, 44, 46;
+
+  /* Sheet/modal backdrop */
+  --vibrancy-sheet: rgba(28, 28, 30, 0.85);
+  --vibrancy-sheet-rgb: 28, 28, 30;
+
+  /* Popover background */
+  --vibrancy-popover: rgba(44, 44, 46, 0.95);
+  --vibrancy-popover-rgb: 44, 44, 46;
+
+  /* ============================================
+     Border & Separator Colors
+     ============================================ */
+
+  --separator-opaque: rgba(255, 255, 255, 0.1);
+  --separator-non-opaque: rgba(255, 255, 255, 0.065);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color-strong: rgba(255, 255, 255, 0.15);
+
+  /* ============================================
+     Fill Colors (for controls)
+     ============================================ */
+
+  --fill-primary: rgba(120, 120, 128, 0.36);
+  --fill-secondary: rgba(120, 120, 128, 0.32);
+  --fill-tertiary: rgba(118, 118, 128, 0.24);
+  --fill-quaternary: rgba(116, 116, 128, 0.18);
+
+  /* ============================================
+     Spacing Scale
+     ============================================ */
+
+  --space-1: 4px;   /* 0.25rem */
+  --space-2: 8px;   /* 0.5rem */
+  --space-3: 12px;  /* 0.75rem */
+  --space-4: 16px;  /* 1rem */
+  --space-5: 20px;  /* 1.25rem */
+  --space-6: 24px;  /* 1.5rem */
+  --space-7: 28px;  /* 1.75rem */
+  --space-8: 32px;  /* 2rem */
+  --space-10: 40px; /* 2.5rem */
+  --space-12: 48px; /* 3rem */
+  --space-16: 64px; /* 4rem */
+
+  /* ============================================
+     Border Radius
+     ============================================ */
+
+  --radius-sm: 6px;   /* Small controls, badges */
+  --radius-md: 10px;  /* Buttons, inputs, cards */
+  --radius-lg: 14px;  /* Modals, sheets, large cards */
+  --radius-xl: 18px;  /* Hero elements */
+  --radius-full: 9999px; /* Pills, avatars */
+
+  /* ============================================
+     Shadows & Elevation
+     ============================================ */
+
+  /* Level 0 - Flat on surface */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3),
+               0 1px 3px 0 rgba(0, 0, 0, 0.15);
+
+  /* Level 1 - Slightly elevated (buttons, cards) */
+  --shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.35),
+               0 4px 8px 0 rgba(0, 0, 0, 0.2);
+
+  /* Level 2 - Floating elements (dropdowns, popovers) */
+  --shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.4),
+               0 12px 24px 0 rgba(0, 0, 0, 0.25);
+
+  /* Level 3 - Modals, sheets */
+  --shadow-xl: 0 8px 16px 0 rgba(0, 0, 0, 0.45),
+               0 24px 48px 0 rgba(0, 0, 0, 0.3);
+
+  /* Level 4 - Highest elevation (alerts, notifications) */
+  --shadow-2xl: 0 12px 24px 0 rgba(0, 0, 0, 0.5),
+                0 32px 64px 0 rgba(0, 0, 0, 0.35);
+
+  /* Inner shadows for inset controls */
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+
+  /* ============================================
+     Z-Index Scale
+     ============================================ */
+
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-fixed: 1200;
+  --z-modal-backdrop: 1300;
+  --z-modal: 1400;
+  --z-popover: 1500;
+  --z-tooltip: 1600;
+  --z-notification: 1700;
+
+  /* ============================================
+     Animation & Transition
+     ============================================ */
+
+  /* Timing functions */
+  --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+  --ease-out: cubic-bezier(0, 0, 0.58, 1);
+  --ease-in: cubic-bezier(0.42, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Durations */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+
+  /* ============================================
+     Control Sizes
+     ============================================ */
+
+  --control-height-sm: 24px;
+  --control-height-md: 32px;
+  --control-height-lg: 40px;
+
+  /* ============================================
+     Blur Effects
+     ============================================ */
+
+  --blur-sm: blur(8px);
+  --blur-md: blur(16px);
+  --blur-lg: blur(24px);
+  --blur-xl: blur(40px);
+}
+
+/* ============================================
+   Light Mode Override (optional)
+   ============================================ */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Only override if light mode support is needed */
+    /* Currently optimized for dark mode only */
+  }
+}

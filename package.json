@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.18.0",
   "bin": {
     "termai": "./bin/termai.cjs",
     "termai-local-agent": "./bin/local-agent.cjs"
@@ -15,7 +16,19 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "install:all": "npm install && cd server && npm install",
-    "local-agent": "node bin/local-agent.cjs"
+    "local-agent": "node bin/local-agent.cjs",
+
+    "workspace:build": "pnpm -r build",
+    "workspace:typecheck": "pnpm -r typecheck",
+    "workspace:clean": "pnpm -r clean",
+
+    "electron:dev": "pnpm --filter @termai/electron dev",
+    "electron:build": "pnpm --filter @termai/electron build",
+
+    "web:dev": "pnpm --filter @termai/web dev",
+    "web:start": "pnpm --filter @termai/web start",
+
+    "packages:build": "pnpm --filter './packages/*' build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
@@ -31,6 +44,9 @@
     "react-dom": "^19.2.0",
     "socket.io-client": "^4.8.1",
     "uuid": "^13.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild", "node-pty"]
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

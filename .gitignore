@@ -12,6 +12,21 @@ dist
 dist-ssr
 *.local
 
+# Monorepo build outputs
+packages/*/dist
+apps/*/dist
+apps/*/out
+
+# pnpm
+.pnpm-store/
+pnpm-lock.yaml
+
+# Electron
+apps/electron/out/
+*.dmg
+*.exe
+*.AppImage
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

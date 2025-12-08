@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Terminal, FitAddon } from "ghostty-web";
-import { io } from "socket.io-client";
-import type { Socket } from "socket.io-client";
+import { useSystem } from "@termai/ui-core";
 import styles from "./InteractiveBlock.module.css";
-import { config } from "../../config";
 import { initGhostty } from "../../services/GhosttyService";
 
 interface InteractiveBlockProps {
@@ -19,10 +17,12 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+
+  const { pty } = useSystem();
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -53,7 +53,7 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
         // Load FitAddon for auto-sizing
         const fitAddon = new FitAddon();
         term.loadAddon(fitAddon);
-        
+
         // Open terminal in DOM
         term.open(terminalRef.current);
         fitAddon.fit();
@@ -62,42 +62,52 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
         fitAddonRef.current = fitAddon;
         setIsInitializing(false);
 
-        // Connect to backend PTY
-        const socket = io(config.wsUrl);
-        socketRef.current = socket;
-
-        socket.on("connect", () => {
-          // Spawn PTY with command
-          socket.emit("spawn", {
-            command,
-            cwd,
-            cols: term.cols,
-            rows: term.rows,
-          });
+        // Spawn PTY using Universal Bridge
+        const { id } = await pty.spawn({
+          shell: '/bin/bash',
+          args: ['-c', command],
+          cwd,
+          cols: term.cols,
+          rows: term.rows,
         });
 
-        socket.on("output", (data: string) => {
-          term.write(data);
+        sessionIdRef.current = id;
+
+        // Subscribe to PTY data output
+        const unsubscribeData = pty.onData(id, (data: string) => {
+          if (termRef.current) {
+            term.write(data);
+          }
         });
 
-        socket.on("exit", ({ exitCode }: { exitCode: number }) => {
+        // Subscribe to PTY exit
+        const unsubscribeExit = pty.onExit(id, (exitCode: number) => {
           onExit(exitCode);
-          socket.disconnect();
         });
 
         // Forward user input to PTY
-        term.onData((data: string) => {
-          socket.emit("input", data);
+        const inputDisposable = term.onData(async (data: string) => {
+          if (sessionIdRef.current) {
+            try {
+              await pty.write(sessionIdRef.current, data);
+            } catch (error) {
+              console.error("[InteractiveBlock] Failed to write to PTY:", error);
+            }
+          }
         });
 
         // Handle window resize
-        const handleResize = () => {
-          if (fitAddonRef.current && termRef.current) {
+        const handleResize = async () => {
+          if (fitAddonRef.current && termRef.current && sessionIdRef.current) {
             fitAddonRef.current.fit();
-            socket.emit("resize", { 
-              cols: termRef.current.cols, 
-              rows: termRef.current.rows 
-            });
+            try {
+              await pty.resize(sessionIdRef.current, {
+                cols: termRef.current.cols,
+                rows: termRef.current.rows,
+              });
+            } catch (error) {
+              console.error("[InteractiveBlock] Failed to resize PTY:", error);
+            }
           }
         };
         window.addEventListener("resize", handleResize);
@@ -105,7 +115,17 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
         // Store cleanup function
         cleanupFn = () => {
           window.removeEventListener("resize", handleResize);
-          socket.disconnect();
+          unsubscribeData();
+          unsubscribeExit();
+          inputDisposable.dispose();
+
+          // Kill PTY session
+          if (sessionIdRef.current) {
+            pty.kill(sessionIdRef.current).catch((error) => {
+              console.error("[InteractiveBlock] Failed to kill PTY:", error);
+            });
+          }
+
           term.dispose();
         };
       } catch (error) {
@@ -123,7 +143,7 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
       mounted = false;
       cleanupFn?.();
     };
-  }, [command, cwd, onExit]);
+  }, [command, cwd, onExit, pty]);
 
   return (
     <div className={styles.wrapper}>
@@ -147,9 +167,9 @@ export const InteractiveBlock: React.FC<InteractiveBlockProps> = ({
         {initError && (
           <div className={styles.errorMessage}>Error: {initError}</div>
         )}
-        <div 
-          className={styles.terminal} 
-          ref={terminalRef} 
+        <div
+          className={styles.terminal}
+          ref={terminalRef}
           style={{ display: isInitializing || initError ? 'none' : 'block' }}
         />
       </div>

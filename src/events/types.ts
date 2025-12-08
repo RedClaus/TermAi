@@ -3,6 +3,8 @@
  * Central registry of all custom events used in TermAI
  */
 
+import type { FrameworkType, ThinkingStep, FrameworkResult } from '../types/frameworks';
+
 // ===========================================
 // Event Payload Definitions
 // ===========================================
@@ -99,6 +101,48 @@ export interface BackgroundExitPayload {
   duration: number;
 }
 
+// Thinking Framework Events
+export interface ThinkingStartedPayload {
+  sessionId: string;
+  framework: FrameworkType;
+  problem: string;
+}
+
+export interface ThinkingStepPayload {
+  sessionId: string;
+  step: ThinkingStep;
+}
+
+export interface ThinkingPhasePayload {
+  sessionId: string;
+  framework: FrameworkType;
+  phase: string;
+  previousPhase?: string;
+}
+
+export interface ThinkingCompletePayload {
+  sessionId: string;
+  result: FrameworkResult;
+}
+
+export interface ThinkingErrorPayload {
+  sessionId: string;
+  error: string;
+  framework?: FrameworkType;
+}
+
+export interface ThinkingPausedPayload {
+  sessionId: string;
+  framework: FrameworkType;
+  phase: string;
+}
+
+export interface ThinkingResumedPayload {
+  sessionId: string;
+  framework: FrameworkType;
+  phase: string;
+}
+
 // ===========================================
 // Event Map
 // =========================================== 
@@ -136,6 +180,15 @@ export interface TermAiEvents {
   "termai-background-started": BackgroundStartedPayload;
   "termai-background-output": BackgroundOutputPayload;
   "termai-background-exit": BackgroundExitPayload;
+
+  // Thinking Framework Events
+  "termai-thinking-started": ThinkingStartedPayload;
+  "termai-thinking-step": ThinkingStepPayload;
+  "termai-thinking-phase": ThinkingPhasePayload;
+  "termai-thinking-complete": ThinkingCompletePayload;
+  "termai-thinking-error": ThinkingErrorPayload;
+  "termai-thinking-paused": ThinkingPausedPayload;
+  "termai-thinking-resumed": ThinkingResumedPayload;
 }
 
 // ===========================================
@@ -188,5 +241,12 @@ declare global {
     "termai-background-started": CustomEvent<BackgroundStartedPayload>;
     "termai-background-output": CustomEvent<BackgroundOutputPayload>;
     "termai-background-exit": CustomEvent<BackgroundExitPayload>;
+    "termai-thinking-started": CustomEvent<ThinkingStartedPayload>;
+    "termai-thinking-step": CustomEvent<ThinkingStepPayload>;
+    "termai-thinking-phase": CustomEvent<ThinkingPhasePayload>;
+    "termai-thinking-complete": CustomEvent<ThinkingCompletePayload>;
+    "termai-thinking-error": CustomEvent<ThinkingErrorPayload>;
+    "termai-thinking-paused": CustomEvent<ThinkingPausedPayload>;
+    "termai-thinking-resumed": CustomEvent<ThinkingResumedPayload>;
   }
 }
