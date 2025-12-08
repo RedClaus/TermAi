@@ -43,6 +43,7 @@ import {
   formatOutputMessage,
   processResponseForCommand,
 } from "../../hooks/useAutoRunMachine";
+import { useWidgetContext } from "../../hooks/useWidgetContext";
 import { isSmallModel } from "../../data/models";
 
 // Components
@@ -177,6 +178,18 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
 
   // Include safety confirm in needsAttention calculation
   const actualNeedsAttention = needsAttention || showSafetyConfirm;
+
+  // =============================================
+  // Widget Context Hook
+  // =============================================
+  const {
+    gitBranch,
+    hasContext,
+    commandCount,
+  } = useWidgetContext({
+    sessionId: sessionId || "default",
+    autoFetchGit: true,
+  });
 
   // =============================================
   // Effects
@@ -317,6 +330,8 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
             cwd: currentCwd,
             isAutoRun: true,
             isLiteMode: useLiteMode,
+            sessionId: sessionId || "default",
+            includeTerminalContext: hasContext,
           });
           const response = await llm.chat(systemPrompt, context, sessionId);
           setMessages((prev) => [...prev, { role: "ai", content: response }]);
@@ -351,6 +366,7 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
     setIsLoading,
     setAgentStatus,
     setConsecutiveStalls,
+    hasContext,
   ]);
 
   // Handle command finished for auto-run loop
@@ -404,6 +420,8 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
           cwd: currentCwd,
           isAutoRun,
           isLiteMode: useLiteMode,
+          sessionId: sessionId || "default",
+          includeTerminalContext: hasContext,
         });
         const response = await llm.chat(systemPrompt, context, sessionId);
         setMessages((prev) => [...prev, { role: "ai", content: response }]);
@@ -434,6 +452,7 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
       setAgentStatus,
       models,
       isLiteMode,
+      hasContext,
     ]
   );
 
@@ -491,6 +510,8 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
         cwd: currentCwd,
         isAutoRun,
         isLiteMode: useLiteMode,
+        sessionId: sessionId || "default",
+        includeTerminalContext: hasContext,
       });
       const response = await llm.chat(systemPrompt, context, sessionId);
 
@@ -574,13 +595,77 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
       <div className={styles.inputArea}>
         {/* Context chips */}
         <div className={styles.contextChips}>
-          <div className={styles.chip}>
-            <Folder size={10} />
-            <span>{currentCwd.split("/").pop() || "~"}</span>
+          <Tooltip text={`Current directory: ${currentCwd}`}>
+            <div className={styles.chip}>
+              <Folder size={10} />
+              <span>{currentCwd.split("/").pop() || "~"}</span>
+            </div>
+          </Tooltip>
+          {gitBranch && (
+            <Tooltip text={`Git branch: ${gitBranch}`}>
+              <div className={styles.chip}>
+                <GitBranch size={10} />
+                <span>git:({gitBranch})</span>
+              </div>
+            </Tooltip>
+          )}
+          {hasContext && (
+            <Tooltip text={`AI has context from ${commandCount} recent commands`}>
+              <div className={`${styles.chip} ${styles.contextActive}`}>
+                <Sparkles size={10} />
+                <span>Context</span>
+              </div>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Action Toolbar - sits above input for better control */}
+        <div className={styles.actionToolbar}>
+          <div className={styles.toolbarLeft}>
+            <Tooltip text="Attach file">
+              <button className={styles.toolbarBtn} type="button">
+                <Paperclip size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip text="Browse files">
+              <button className={styles.toolbarBtn} type="button">
+                <FolderOpen size={16} />
+              </button>
+            </Tooltip>
           </div>
-          <div className={styles.chip}>
-            <GitBranch size={10} />
-            <span>git:(main)</span>
+
+          <div className={styles.toolbarRight}>
+            <Tooltip
+              text={
+                isAutoRun
+                  ? "Auto-run ON - Click to disable"
+                  : "Enable auto-run mode"
+              }
+            >
+              <button
+                className={`${styles.autoRunBtn} ${isAutoRun ? styles.active : ""}`}
+                onClick={toggleAutoRun}
+                type="button"
+              >
+                <ChevronsRight size={16} />
+                <span className={styles.autoRunLabel}>
+                  {isAutoRun ? "Auto-run ON" : "Auto-run"}
+                </span>
+              </button>
+            </Tooltip>
+
+            {(isAutoRun || isLoading) && (
+              <Tooltip text="Stop execution">
+                <button
+                  className={styles.stopBtn}
+                  onClick={() => stopAutoRun("user")}
+                  type="button"
+                >
+                  <Square size={14} />
+                  <span>Stop</span>
+                </button>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -614,51 +699,14 @@ export const AIInputBox: React.FC<AIInputBoxProps> = ({
                   <Command size={14} />
                 </button>
               </Tooltip>
-              <Tooltip text="Attach file">
-                <button className={styles.toolBtn} type="button">
-                  <Paperclip size={14} />
-                </button>
-              </Tooltip>
               <Tooltip text="Mention context">
                 <button className={styles.toolBtn} type="button">
                   <AtSign size={14} />
                 </button>
               </Tooltip>
-              <Tooltip text="Browse files">
-                <button className={styles.toolBtn} type="button">
-                  <FolderOpen size={14} />
-                </button>
-              </Tooltip>
             </div>
 
             <div className={styles.actions}>
-              <Tooltip
-                text={
-                  isAutoRun
-                    ? "Auto-run ON - Click to disable"
-                    : "Enable auto-run mode"
-                }
-              >
-                <button
-                  className={`${styles.autoRunBtn} ${isAutoRun ? styles.active : ""}`}
-                  onClick={toggleAutoRun}
-                  type="button"
-                >
-                  <ChevronsRight size={16} />
-                </button>
-              </Tooltip>
-
-              {(isAutoRun || isLoading) && (
-                <Tooltip text="Stop execution">
-                  <button
-                    className={styles.stopBtn}
-                    onClick={() => stopAutoRun("user")}
-                    type="button"
-                  >
-                    <Square size={14} />
-                  </button>
-                </Tooltip>
-              )}
 
               <Tooltip text="Learn from this session">
                 <button

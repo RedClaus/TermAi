@@ -7,8 +7,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   X,
   Download,
-  Copy,
-  Check,
   FileText,
   FileCode,
   Image as ImageIcon,
@@ -24,6 +22,7 @@ import styles from "./FilePreview.module.css";
 import { FileSystemService } from "../../services/FileSystemService";
 import { Markdown } from "../common/Markdown";
 import { CodeBlock } from "../common/CodeBlock";
+import { CopyButton } from "../common/CopyButton";
 
 // =============================================
 // Types
@@ -299,7 +298,6 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
   const [content, setContent] = useState<string>("");
   const [mode, setMode] = useState<PreviewMode>("loading");
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [imageZoom, setImageZoom] = useState(100);
   const [fileSize, setFileSize] = useState<number | undefined>();
   
@@ -341,16 +339,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
     loadFile();
   }, [loadFile]);
   
-  // Copy content to clipboard
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  }, [content]);
+  
   
   // Get mode icon
   const getModeIcon = () => {
@@ -383,13 +372,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
         
         <div className={styles.actions}>
           {mode !== "loading" && mode !== "error" && mode !== "binary" && mode !== "image" && (
-            <button 
-              className={styles.actionBtn} 
-              onClick={handleCopy}
-              title={copied ? "Copied!" : "Copy content"}
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-            </button>
+            <CopyButton text={content} className={styles.actionBtn} title="Copy content" />
           )}
           
           <button 

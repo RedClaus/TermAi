@@ -90,11 +90,21 @@ export function useSettingsLoader({
   setAgentStatus,
   isActive = true,
 }: SettingsLoaderOptions): SettingsLoaderResult {
+  // DEBUG: Log hook initialization
+  console.log('[useSettingsLoader] Hook initialized with:', { sessionId, initialCwd, isActive });
+
   // =============================================
   // State
   // =============================================
-  const [hasKey, setHasKey] = useState(false);
+  const [hasKey, setHasKeyInternal] = useState(false);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
+
+  // Wrapper for setHasKey to add logging
+  const setHasKey = (value: boolean) => {
+    console.log('[useSettingsLoader] setHasKey called with:', value, '(previous:', hasKey, ')');
+    console.trace('[useSettingsLoader] setHasKey call stack');
+    setHasKeyInternal(value);
+  };
   const [models, setModels] = useState<ModelSpec[]>(AVAILABLE_MODELS);
   const [selectedModelId, setSelectedModelId] = useState(() => getInitialModelId(sessionId));
   const [currentCwd, setCurrentCwd] = useState(initialCwd);
@@ -146,10 +156,13 @@ export function useSettingsLoader({
   // =============================================
   const loadSettings = useCallback(async () => {
     const storedProvider = localStorage.getItem("termai_provider") || "gemini";
+    console.log('[LoadSettings] Loading settings for provider:', storedProvider);
+    console.log('[LoadSettings] Current state - hasKey:', hasKey, 'isCheckingKey:', isCheckingKey);
 
     // Handle Ollama specially (no API key needed)
     if (storedProvider === "ollama") {
       const endpoint = localStorage.getItem("termai_ollama_endpoint") || config.defaultOllamaEndpoint;
+      console.log('[LoadSettings] Ollama provider detected, setting hasKey=true');
       setHasKey(true);
       setIsCheckingKey(false);
       fetchOllamaModels(endpoint);
@@ -158,9 +171,11 @@ export function useSettingsLoader({
 
     setIsCheckingKey(true);
     try {
+      console.log('[LoadSettings] Checking API key for provider:', storedProvider);
       const hasServerKey = await LLMManager.hasApiKey(storedProvider);
+      console.log('[LoadSettings] API key check result:', hasServerKey);
       setHasKey(hasServerKey);
-      
+
       if (hasServerKey) {
         // Fetch dynamic models for the provider
         const dynamicModels = await LLMManager.fetchModels(storedProvider);
@@ -193,8 +208,10 @@ export function useSettingsLoader({
   // =============================================
   const handleModelSelect = useCallback(
     async (model: ModelSpec) => {
+      console.log('[ModelSelect] Selecting model:', model.id, 'provider:', model.provider);
       setSelectedModelId(model.id);
       localStorage.setItem("termai_provider", model.provider);
+      console.log('[ModelSelect] localStorage termai_provider set to:', localStorage.getItem("termai_provider"));
 
       // Save model selection per session
       if (sessionId) {
@@ -256,7 +273,9 @@ export function useSettingsLoader({
   // Load settings on mount (respecting isActive for inactive tabs)
   // Use hasLoadedRef to prevent re-running when loadSettings changes
   useEffect(() => {
+    console.log('[useSettingsLoader] Mount effect - isActive:', isActive, 'hasLoaded:', hasLoadedRef.current);
     if (isActive && !hasLoadedRef.current) {
+      console.log('[useSettingsLoader] Triggering loadSettings...');
       hasLoadedRef.current = true;
       loadSettingsRef.current?.();
     }
@@ -305,6 +324,7 @@ export function useSettingsLoader({
   // =============================================
   // Return
   // =============================================
+  console.log('[useSettingsLoader] Returning state - hasKey:', hasKey, 'isCheckingKey:', isCheckingKey);
   return {
     // State
     hasKey,

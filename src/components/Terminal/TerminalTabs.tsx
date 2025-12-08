@@ -1,9 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Workspace } from "../Workspace/Workspace";
-import styles from "./TerminalTabs.module.css";
 import { Plus, X, Terminal } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import clsx from "clsx";
 import { useTermAiEvent } from "../../hooks/useTermAiEvent";
 import type { RestoreSessionPayload } from "../../events/types";
 import { SessionManager } from "../../services/SessionManager";
@@ -161,41 +159,51 @@ export const TerminalTabs: React.FC = () => {
   }, [tabs, activeTabId]);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.tabBar}>
+    <div className="flex flex-col h-full w-full bg-[#0a0a0a]">
+      {/* Tab bar - 48px height with proper styling */}
+      <header className="h-12 bg-[#111111] border-b border-gray-800 flex items-center gap-2 px-3">
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={clsx(
-              styles.tab,
-              activeTabId === tab.id && styles.active,
-            )}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-t-md min-h-[36px]
+              cursor-pointer transition-all duration-200
+              min-w-[140px] max-w-[200px] group
+              ${activeTabId === tab.id 
+                ? 'bg-[#1a1a1a] border-t-2 border-cyan-400 text-gray-200' 
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+              }
+            `}
             onClick={() => handleTabClick(tab.id)}
           >
-            <Terminal size={12} />
-            <span className={styles.tabTitle}>{tab.title}</span>
+            <Terminal size={14} className={activeTabId === tab.id ? 'text-cyan-400' : ''} />
+            <span className="flex-1 text-[14px] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{tab.title}</span>
             {tabs.length > 1 && (
               <div
-                className={styles.closeBtn}
+                className="opacity-0 group-hover:opacity-70 p-1 rounded cursor-pointer flex items-center justify-center hover:opacity-100 hover:bg-white/10 transition-all"
                 onClick={(e) => closeTab(e, tab.id)}
               >
-                <X size={12} />
+                <X size={14} />
               </div>
             )}
           </div>
         ))}
-        <div className={styles.addBtn} onClick={addTab} title="New Terminal">
-          <Plus size={16} />
+        <div 
+          className="flex items-center justify-center w-8 h-8 rounded text-gray-500 cursor-pointer ml-1 hover:bg-white/5 hover:text-gray-300 transition-all"
+          onClick={addTab} 
+          title="New Terminal"
+        >
+          <Plus size={18} />
         </div>
-      </div>
-      <div className={styles.content}>
+      </header>
+      <div className="flex-1 relative overflow-hidden">
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={clsx(
-              styles.tabContent,
-              activeTabId === tab.id && styles.active,
-            )}
+            className={`
+              absolute inset-0
+              ${activeTabId === tab.id ? 'block' : 'hidden'}
+            `}
           >
             <Workspace sessionId={tab.id} isActive={activeTabId === tab.id} />
           </div>

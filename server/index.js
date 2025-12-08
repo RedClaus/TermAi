@@ -41,6 +41,18 @@ const {
 // Import routes
 const llmRoutes = require("./routes/llm");
 const knowledgeRoutes = require("./routes/knowledge");
+const promptsRoutes = require("./routes/prompts");
+const flowsRoutes = require("./routes/flows");
+const ingestionRoutes = require("./routes/ingestion");
+
+// Import Knowledge Engine
+const { startWatcher, getKnowledgeEngine } = require("./services/KnowledgeEngine");
+
+// Import Ingestion Service
+const { getIngestionService } = require("./services/IngestionService");
+
+// Import Hybrid Socket Handlers (optional - for PTY + AI integration)
+const { setupSocketHandlers } = require("./socket");
 
 const app = express();
 const server = http.createServer(app);
@@ -95,6 +107,30 @@ app.get("/api/health", (req, res) => {
     version: "1.0.0",
     timestamp: new Date().toISOString(),
   });
+});
+
+// ===========================================
+// Initial CWD - Returns the directory where TermAI CLI was launched
+// ===========================================
+app.get("/api/initial-cwd", (req, res) => {
+  // TERMAI_LAUNCH_CWD is set by the CLI when starting the server
+  // Falls back to HOME directory if not launched via CLI
+  const launchCwd = process.env.TERMAI_LAUNCH_CWD || os.homedir();
+  
+  // Verify the directory exists
+  const resolvedPath = expandHome(launchCwd);
+  if (fs.existsSync(resolvedPath)) {
+    res.json({
+      cwd: resolvedPath,
+      isCliLaunch: !!process.env.TERMAI_LAUNCH_CWD,
+    });
+  } else {
+    // Fall back to home if the launch directory doesn't exist anymore
+    res.json({
+      cwd: os.homedir(),
+      isCliLaunch: false,
+    });
+  }
 });
 
 // ===========================================
@@ -194,6 +230,9 @@ app.delete("/api/session/logs/:sessionId", (req, res) => {
 // ===========================================
 app.use("/api/llm", llmRoutes);
 app.use("/api/knowledge", knowledgeRoutes);
+app.use("/api/prompts", promptsRoutes);
+app.use("/api/flows", flowsRoutes);
+app.use("/api/ingestion", ingestionRoutes);
 
 // ===========================================
 // Process Management
@@ -221,6 +260,64 @@ app.post("/api/cancel", (req, res) => {
   }
 });
 
+// Helper to find a valid shell
+const getValidShell = () => {
+  if (os.platform() === 'win32') {
+    return process.env.COMSPEC || 'cmd.exe';
+  }
+
+  // 1. Trust the environment variable if set
+  if (process.env.SHELL) {
+    console.log(`[Shell Detection] Trusting process.env.SHELL: ${process.env.SHELL}`);
+    return process.env.SHELL;
+  }
+
+  // 2. Platform specific defaults (blind trust)
+  if (os.platform() === 'darwin') {
+    console.log('[Shell Detection] macOS detected, defaulting to /bin/zsh');
+    return '/bin/zsh';
+  }
+
+  // 3. Linux/Unix candidates
+  const candidates = [
+    '/bin/bash',
+    '/usr/bin/bash',
+    '/bin/sh',
+    '/bin/ash'
+  ];
+
+  for (const shell of candidates) {
+    try {
+      if (fs.existsSync(shell)) {
+        console.log(`[Shell Detection] Found shell: ${shell}`);
+        return shell;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  console.log('[Shell Detection] Fallback to /bin/sh');
+  return '/bin/sh';
+};
+
+// ===========================================
+// Debug Endpoint for Shell
+// ===========================================
+app.get("/api/debug/shell", (req, res) => {
+  const shell = getValidShell();
+  const env = process.env.SHELL;
+  const platform = os.platform();
+  
+  res.json({
+    selectedShell: shell,
+    envShell: env,
+    platform,
+    path: process.env.PATH,
+    candidatesChecked: true
+  });
+});
+
 // ===========================================
 // Command Execution
 // ===========================================
@@ -229,6 +326,35 @@ app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
 
   // Default to home dir if no cwd provided
   let currentDir = cwd ? expandHome(cwd) : os.homedir();
+  let cwdCorrected = false;
+  const originalCwd = currentDir;
+  
+  // Validate cwd exists on this server - fall back to home if not
+  // This handles cases where client (Mac browser) sends a path that doesn't exist on server (Ubuntu)
+  if (!fs.existsSync(currentDir) || !fs.lstatSync(currentDir).isDirectory()) {
+    console.warn(`[Execute] CWD VALIDATION FAILED: "${currentDir}" does not exist on this server`);
+    console.warn(`[Execute] Falling back to home directory: ${os.homedir()}`);
+    
+    // Check if this looks like a path from another OS (e.g. /Users on Linux)
+    let reason = "Directory does not exist.";
+    if (os.platform() === 'linux' && currentDir.startsWith('/Users')) {
+      reason = "Path looks like a macOS directory, but this server is running Linux.";
+    } else if (os.platform() === 'win32' && currentDir.startsWith('/')) {
+      reason = "Path looks like a Unix directory, but this server is running Windows.";
+    }
+
+    currentDir = os.homedir();
+    cwdCorrected = true;
+    
+    // Attach specific fallback info for frontend
+    req.cwdFallback = {
+      originalPath: originalCwd,
+      serverPath: currentDir,
+      reason
+    };
+  } else {
+    console.log(`[Execute] CWD validated OK: "${currentDir}"`);
+  }
 
   // Handle standalone "cd" command specifically (not compound commands like "cd x && y")
   const trimmedCmd = command.trim();
@@ -255,23 +381,33 @@ app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
         exitCode: 0,
         newCwd: newDir,
         warning: req.commandWarning,
+        cwdFallback: req.cwdFallback // Pass fallback info if present
       });
     } else {
-      return res.json({
+      const errorResponse = {
         output: `cd: no such file or directory: ${target}`,
         exitCode: 1,
-      });
+        cwdFallback: req.cwdFallback // Pass fallback info if present
+      };
+      if (cwdCorrected) {
+        errorResponse.newCwd = currentDir;
+      }
+      return res.json(errorResponse);
     }
   }
 
   // Execute other commands with timeout
   const timeout = 120000; // 2 minutes
+  const shell = getValidShell();
+  console.log(`[Execute] Running command: "${command}" using shell: ${shell}`);
+  
   const child = exec(
     command,
     {
       cwd: currentDir,
       timeout,
       maxBuffer: 10 * 1024 * 1024, // 10MB
+      shell,
     },
     (error, stdout, stderr) => {
       if (commandId) delete activeProcesses[commandId];
@@ -282,23 +418,36 @@ app.post("/api/execute", sanitizeCommand, validateCommand, (req, res) => {
           exitCode: error.code || 1,
           output: stderr || error.message,
         });
-        return res.json({
+        const errorResponse = {
           output: stderr || error.message,
           exitCode: error.code || 1,
           warning: req.commandWarning,
-        });
+          cwdFallback: req.cwdFallback
+        };
+        // Also notify client of corrected cwd even on error
+        if (cwdCorrected) {
+          errorResponse.newCwd = currentDir;
+        }
+        return res.json(errorResponse);
       }
 
       // Log successful command execution
       logCommand(sessionId, command, currentDir, {
         exitCode: 0,
         output: stdout,
+        cwdFallback: req.cwdFallback // Pass fallback info if present
       });
-      return res.json({
+      const response = {
         output: stdout,
         exitCode: 0,
         warning: req.commandWarning,
-      });
+        cwdFallback: req.cwdFallback // Pass fallback info if present
+      };
+      // Notify client if cwd was corrected (e.g., invalid path from another machine)
+      if (cwdCorrected) {
+        response.newCwd = currentDir;
+      }
+      return res.json(response);
     },
   );
 
@@ -391,6 +540,160 @@ app.post("/api/fs/mkdir", validatePath, (req, res) => {
   }
 });
 
+/**
+ * GET /api/fs/drives
+ * List mounted drives/volumes on the system
+ * - Windows: Returns drive letters (C:, D:, etc.)
+ * - Linux/Mac: Returns mount points from /proc/mounts or common paths
+ */
+app.get("/api/fs/drives", (req, res) => {
+  try {
+    const platform = os.platform();
+    const drives = [];
+
+    if (platform === "win32") {
+      // Windows: Check for drive letters A-Z
+      const { execSync } = require("child_process");
+      try {
+        // Use wmic to get logical disks
+        const output = execSync("wmic logicaldisk get name", { encoding: "utf-8" });
+        const lines = output.split("\n").filter(line => line.trim() && line.trim() !== "Name");
+        lines.forEach(line => {
+          const driveLetter = line.trim();
+          if (driveLetter && /^[A-Z]:$/.test(driveLetter)) {
+            drives.push({
+              name: driveLetter,
+              path: driveLetter + "\\",
+              type: "drive",
+            });
+          }
+        });
+      } catch {
+        // Fallback: Check common drive letters
+        for (let i = 65; i <= 90; i++) {
+          const letter = String.fromCharCode(i);
+          const drivePath = `${letter}:\\`;
+          if (fs.existsSync(drivePath)) {
+            drives.push({
+              name: `${letter}:`,
+              path: drivePath,
+              type: "drive",
+            });
+          }
+        }
+      }
+    } else {
+      // Linux/Mac: Common mount points and root
+      drives.push({
+        name: "/",
+        path: "/",
+        type: "root",
+      });
+
+      // Home directory
+      const homeDir = os.homedir();
+      drives.push({
+        name: "Home",
+        path: homeDir,
+        type: "home",
+      });
+
+      // Check for common mount points
+      const mountPoints = ["/mnt", "/media", "/Volumes"];
+      
+      mountPoints.forEach(mountBase => {
+        if (fs.existsSync(mountBase)) {
+          try {
+            const entries = fs.readdirSync(mountBase, { withFileTypes: true });
+            entries.forEach(entry => {
+              if (entry.isDirectory()) {
+                const mountPath = path.join(mountBase, entry.name);
+                drives.push({
+                  name: entry.name,
+                  path: mountPath,
+                  type: "mount",
+                });
+              }
+            });
+          } catch {
+            // Skip if can't read mount point
+          }
+        }
+      });
+
+      // Current working directory (where TermAI was launched)
+      const launchDir = process.env.TERMAI_LAUNCH_CWD || process.cwd();
+      if (launchDir !== homeDir && launchDir !== "/") {
+        drives.push({
+          name: "Current Project",
+          path: launchDir,
+          type: "project",
+        });
+      }
+    }
+
+    res.json({ drives });
+  } catch (error) {
+    logError(error, req);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===========================================
+// Fix Script Download
+// ===========================================
+app.get("/fix.sh", (req, res) => {
+  const scriptPath = path.join(__dirname, "fix.sh");
+  if (fs.existsSync(scriptPath)) {
+    res.setHeader("Content-Type", "text/x-shellscript");
+    res.setHeader("Content-Disposition", 'attachment; filename="fix.sh"');
+    const content = fs.readFileSync(scriptPath, "utf-8");
+    res.send(content);
+  } else {
+    res.status(404).send("Script not found");
+  }
+});
+
+// ===========================================
+// Local Agent Download
+// ===========================================
+
+/**
+ * GET /bin/local-agent.cjs
+ * Serve the local agent script for download
+ */
+app.get("/bin/local-agent.cjs", (req, res) => {
+  // Try multiple possible paths
+  const possiblePaths = [
+    path.resolve(__dirname, "..", "bin", "local-agent.cjs"),
+    path.resolve(process.cwd(), "..", "bin", "local-agent.cjs"),
+    path.resolve(process.cwd(), "bin", "local-agent.cjs"),
+    "/home/normanking/github/TermAi/bin/local-agent.cjs", // Fallback absolute path
+  ];
+  
+  let agentPath = null;
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      agentPath = p;
+      break;
+    }
+  }
+  
+  console.log(`[Download] Looking for local agent, found at: ${agentPath}`);
+  
+  if (!agentPath) {
+    console.error(`[Download] Local agent not found. Tried paths:`, possiblePaths);
+    return res.status(404).json({ error: "Local agent script not found" });
+  }
+  
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="local-agent.cjs"');
+  
+  // Read and send the file content directly
+  const content = fs.readFileSync(agentPath, 'utf-8');
+  res.send(content);
+});
+
 // ===========================================
 // Ollama Proxy (for direct Ollama access)
 // ===========================================
@@ -460,14 +763,42 @@ app.post("/api/proxy/ollama/chat", async (req, res) => {
 // WebSocket / PTY (Interactive Sessions)
 // ===========================================
 
+/**
+ * Get default shell for current platform
+ */
+function getDefaultShell() {
+  const shellPaths = [
+    '/bin/zsh', '/bin/bash', '/bin/sh',
+    '/usr/bin/zsh', '/usr/bin/bash', '/usr/bin/sh',
+    '/usr/local/bin/zsh', '/usr/local/bin/bash',
+  ];
+  for (const shell of shellPaths) {
+    if (fs.existsSync(shell)) return shell;
+  }
+  return '/bin/sh';
+}
+
+// Store knowledge engine reference for socket handlers
+let knowledgeEngineRef = null;
+
 io.on("connection", (socket) => {
   let ptyProcess = null;
 
   console.log(`[WebSocket] Client connected: ${socket.id}`);
 
+  // Legacy spawn handler (for background terminals)
   socket.on("spawn", ({ command, cwd, cols, rows }) => {
-    const shell = os.platform() === "win32" ? "powershell.exe" : "bash";
-    const currentDir = cwd ? expandHome(cwd) : os.homedir();
+    const shell = os.platform() === "win32" ? "powershell.exe" : getDefaultShell();
+    let currentDir = cwd ? expandHome(cwd) : os.homedir();
+
+    // Validate cwd exists - fall back to home directory if not
+    // This handles cases where client (Mac) sends a path that doesn't exist on server (Ubuntu)
+    if (!fs.existsSync(currentDir)) {
+      console.warn(`[WebSocket/spawn] Invalid cwd "${currentDir}", falling back to home directory`);
+      currentDir = os.homedir();
+    }
+
+    console.log(`[WebSocket/spawn] Starting: "${command}" in "${currentDir}"`);
 
     try {
       ptyProcess = pty.spawn(shell, ["-c", command], {
@@ -513,6 +844,11 @@ io.on("connection", (socket) => {
   });
 });
 
+// Setup hybrid AI socket handlers (for ai:prompt, terminal:input, etc.)
+// This runs in a separate namespace to avoid conflicts with legacy handlers
+const hybridNamespace = io.of('/hybrid');
+setupSocketHandlers(hybridNamespace, { getEngine: () => knowledgeEngineRef });
+
 // ===========================================
 // Error Handling
 // ===========================================
@@ -531,7 +867,7 @@ app.use((err, req, res, next) => {
 // Start Server
 // ===========================================
 
-server.listen(config.port, config.host, () => {
+server.listen(config.port, config.host, async () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                    TermAI Backend                         ║
@@ -546,6 +882,8 @@ server.listen(config.port, config.host, () => {
 ║    GET  /api/llm/has-key  - Check API key status         ║
 ║    POST /api/llm/set-key  - Set API key                  ║
 ║    GET  /api/health       - Health check                 ║
+║    POST /api/knowledge/*  - Knowledge base & RAG         ║
+║    POST /api/ingestion/*  - Conversation import          ║
 ║                                                           ║
 ║  Security:                                                ║
 ║    - CORS: ${config.corsOrigins.join(", ").substring(0, 35)}...
@@ -554,4 +892,92 @@ server.listen(config.port, config.host, () => {
 ║    - Path sandboxing: ${config.sandboxDirectory ? "Enabled" : "Home directory only"}               ║
 ╚═══════════════════════════════════════════════════════════╝
     `);
+
+  // Initialize Knowledge Engine (non-blocking)
+  try {
+    const launchDir = process.env.TERMAI_LAUNCH_CWD || process.cwd();
+    console.log('[KnowledgeEngine] Initializing...');
+    
+    const engine = await getKnowledgeEngine();
+    
+    if (engine && engine.isInitialized) {
+      // Pass engine to routes
+      knowledgeRoutes.setKnowledgeEngine(engine);
+      
+      // Store reference for socket handlers
+      knowledgeEngineRef = engine;
+      
+      // Start file watcher for automatic indexing
+      console.log(`[KnowledgeEngine] Starting watcher on: ${launchDir}`);
+      await startWatcher(launchDir, engine);
+      
+      console.log('[KnowledgeEngine] ✓ Ready for semantic search');
+    } else {
+      console.log('[KnowledgeEngine] Not available (optional dependencies missing)');
+    }
+  } catch (error) {
+    console.warn('[KnowledgeEngine] Failed to initialize:', error.message);
+    console.warn('[KnowledgeEngine] Vector search will be disabled');
+  }
+
+  // Initialize Ingestion Service with LLM support
+  try {
+    const ingestionService = getIngestionService();
+
+    // Create LLM chat function that uses our configured providers
+    const llmChat = async (messages) => {
+      const { getApiKey } = require('./config');
+
+      // Try providers in order of preference
+      const providers = ['openai', 'anthropic', 'gemini'];
+
+      for (const provider of providers) {
+        const apiKey = getApiKey(provider);
+        if (!apiKey) continue;
+
+        try {
+          if (provider === 'openai') {
+            const OpenAI = require('openai');
+            const client = new OpenAI({ apiKey });
+            const response = await client.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: messages.map(m => ({ role: m.role, content: m.content })),
+              temperature: 0.3,
+            });
+            return response.choices[0].message.content;
+          }
+
+          if (provider === 'anthropic') {
+            const Anthropic = require('@anthropic-ai/sdk');
+            const client = new Anthropic({ apiKey });
+            const response = await client.messages.create({
+              model: 'claude-3-haiku-20240307',
+              max_tokens: 4096,
+              messages: messages.map(m => ({ role: m.role, content: m.content })),
+            });
+            return response.content[0].text;
+          }
+
+          if (provider === 'gemini') {
+            const { GoogleGenerativeAI } = require('@google/generative-ai');
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+          }
+        } catch (e) {
+          console.warn(`[IngestionService] LLM call failed with ${provider}:`, e.message);
+          continue;
+        }
+      }
+
+      throw new Error('No LLM provider available for extraction');
+    };
+
+    ingestionService.setLLMChat(llmChat);
+    console.log('[IngestionService] ✓ Ready for conversation import');
+  } catch (error) {
+    console.warn('[IngestionService] Failed to initialize:', error.message);
+  }
 });

@@ -1,0 +1,60 @@
+/**
+ * CopyButton Styles - Enhanced for visibility
+ */
+
+.copyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  border: 1px solid #4b5563;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #e5e7eb;
+  transition: all 0.2s ease;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.copyButton:hover {
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+  border-color: #6b7280;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.copyButton:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Size variants */
+.sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.md {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.lg {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* Copied state - Vibrant green */
+.copied {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #059669;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.copied:hover {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #059669;
+  color: #fff;
+}

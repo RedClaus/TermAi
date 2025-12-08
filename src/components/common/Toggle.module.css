@@ -1,0 +1,128 @@
+/**
+ * Toggle Styles - Enhanced for visibility
+ */
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: #374151; /* Dark gray background when off */
+  border: 2px solid #4b5563;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.toggle:hover:not(.disabled) {
+  border-color: #6b7280;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 8px rgba(99, 102, 241, 0.3);
+}
+
+.toggle:focus-visible {
+  outline: 3px solid #818cf8;
+  outline-offset: 2px;
+}
+
+/* Size variants - Made larger */
+.sm {
+  width: 40px;
+  height: 22px;
+}
+
+.md {
+  width: 52px;
+  height: 28px;
+}
+
+.lg {
+  width: 64px;
+  height: 34px;
+}
+
+/* Thumb (the moving circle) */
+.thumb {
+  position: absolute;
+  background: linear-gradient(180deg, #e5e7eb 0%, #d1d5db 100%);
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sm .thumb {
+  width: 16px;
+  height: 16px;
+  left: 3px;
+}
+
+.md .thumb {
+  width: 22px;
+  height: 22px;
+  left: 3px;
+}
+
+.lg .thumb {
+  width: 28px;
+  height: 28px;
+  left: 3px;
+}
+
+/* Checked state - Vibrant green */
+.checked {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #059669;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.checked .thumb {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sm.checked .thumb {
+  transform: translateY(-50%) translateX(18px);
+}
+
+.md.checked .thumb {
+  transform: translateY(-50%) translateX(24px);
+}
+
+.lg.checked .thumb {
+  transform: translateY(-50%) translateX(30px);
+}
+
+/* Disabled state */
+.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+}
+
+/* Wrapper with label */
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.labelLeft {
+  flex-direction: row;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.disabled + .label,
+.wrapper:has(.disabled) .label {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

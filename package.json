@@ -3,6 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "bin": {
+    "termai": "./bin/termai.cjs",
+    "termai-local-agent": "./bin/local-agent.cjs"
+  },
   "scripts": {
     "dev": "vite",
     "dev:server": "cd server && node index.js",
@@ -10,34 +14,39 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "install:all": "npm install && cd server && npm install"
+    "install:all": "npm install && cd server && npm install",
+    "local-agent": "node bin/local-agent.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
     "@google/generative-ai": "^0.24.1",
     "@types/uuid": "^11.0.0",
+    "@xyflow/react": "^12.10.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
+    "ghostty-web": "^0.3.0",
     "lucide-react": "^0.555.0",
     "openai": "^6.9.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "socket.io-client": "^4.8.1",
-    "uuid": "^13.0.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.22",
     "concurrently": "^8.2.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^5.4.11"

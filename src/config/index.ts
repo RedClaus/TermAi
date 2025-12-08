@@ -4,9 +4,19 @@
  */
 
 export const config = {
-  // API endpoints
-  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:3003",
-  wsUrl: import.meta.env.VITE_WS_URL || "http://localhost:3003",
+  // API endpoints - Dynamic detection for local network access
+  // Allows manual override via localStorage 'termai_api_url'
+  apiUrl: (typeof window !== 'undefined' && localStorage.getItem('termai_api_url')) ||
+    import.meta.env.VITE_API_URL || 
+    (typeof window !== 'undefined' 
+      ? `${window.location.protocol}//${window.location.hostname}:3004` 
+      : "http://localhost:3004"),
+
+  wsUrl: (typeof window !== 'undefined' && localStorage.getItem('termai_api_url')) ||
+    import.meta.env.VITE_WS_URL || 
+    (typeof window !== 'undefined' 
+      ? `${window.location.protocol}//${window.location.hostname}:3004` 
+      : "http://localhost:3004"),
 
   // Default settings
   defaultProvider: import.meta.env.VITE_DEFAULT_PROVIDER || "gemini",
@@ -43,6 +53,11 @@ export const config = {
   // Build full URL helper
   getApiUrl(path: string): string {
     return `${this.apiUrl}${path}`;
+  },
+
+  // Build WebSocket URL helper
+  getWsUrl(): string {
+    return this.wsUrl;
   },
 } as const;
 

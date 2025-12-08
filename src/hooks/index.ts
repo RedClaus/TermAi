@@ -43,3 +43,13 @@ export {
 
 export { useUIState, shouldShowComplexDialog } from "./useUIState";
 export type { UIState, UIStateActions, UseUIStateOptions } from "./useUIState";
+
+export { useWidgetContext } from "./useWidgetContext";
+
+export { useErrorAnalysis, ERROR_PATTERNS } from "./useErrorAnalysis";
+export type {
+  ErrorAnalysis,
+  ErrorPattern,
+  UseErrorAnalysisConfig,
+  UseErrorAnalysisReturn,
+} from "./useErrorAnalysis";

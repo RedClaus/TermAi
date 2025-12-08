@@ -84,17 +84,19 @@ class ProxyLLMProvider implements LLMProvider {
     }
 
     try {
+      const requestBody = {
+        provider: this.provider,
+        model: this.modelId,
+        messages,
+        systemPrompt: systemPrompt || "You are a helpful assistant.",
+        endpoint: this.endpoint,
+        sessionId,
+      };
+      console.log('[LLMManager.chat] Sending request:', { provider: this.provider, model: this.modelId });
       const response = await fetch(config.getApiUrl(config.api.llm.chat), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: this.provider,
-          model: this.modelId,
-          messages,
-          systemPrompt: systemPrompt || "You are a helpful assistant.",
-          endpoint: this.endpoint,
-          sessionId,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -126,6 +128,7 @@ export class LLMManager {
   ): LLMProvider {
     // Note: apiKey parameter is kept for backward compatibility but ignored
     // API keys are now managed server-side
+    console.log('[LLMManager.getProvider] type:', type, 'modelId:', modelId);
     switch (type) {
       case "gemini":
         return new ProxyLLMProvider("gemini", modelId);
@@ -133,6 +136,8 @@ export class LLMManager {
         return new ProxyLLMProvider("openai", modelId);
       case "anthropic":
         return new ProxyLLMProvider("anthropic", modelId);
+      case "xai":
+        return new ProxyLLMProvider("xai", modelId);
       case "openrouter":
         return new ProxyLLMProvider("openrouter", modelId);
       case "ollama":
@@ -172,41 +177,73 @@ export class LLMManager {
   }
 
   /**
+   * Delete/clear API key from the server
+   */
+  static async deleteApiKey(provider: string): Promise<boolean> {
+    try {
+      const response = await fetch(config.getApiUrl("/api/llm/delete-key"), {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete API key");
+      }
+
+      // Clear cache so next hasApiKey call fetches fresh data
+      this.clearApiKeyCache(provider);
+      return true;
+    } catch (error) {
+      console.error("Error deleting API key:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if API key exists on the server
    * Uses caching and request deduplication to prevent spam
    */
   static async hasApiKey(provider: string): Promise<boolean> {
+    console.log(`[LLMManager.hasApiKey] Called for provider: ${provider}`);
+
     // Check cache first
     const cached = apiKeyCache.get(provider);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`[LLMManager.hasApiKey] Returning cached value for ${provider}: ${cached.value}`);
       return cached.value;
     }
 
     // Check if there's already a pending request for this provider
     const pending = pendingRequests.get(provider);
     if (pending) {
+      console.log(`[LLMManager.hasApiKey] Returning pending promise for ${provider}`);
       return pending;
     }
 
+    console.log(`[LLMManager.hasApiKey] Making new request for ${provider}`);
     // Make new request and store promise for deduplication
     const requestPromise = (async () => {
       try {
-        const response = await fetch(
-          `${config.getApiUrl(config.api.llm.hasKey)}?provider=${encodeURIComponent(provider)}`,
-        );
+        const url = `${config.getApiUrl(config.api.llm.hasKey)}?provider=${encodeURIComponent(provider)}`;
+        console.log(`[LLMManager.hasApiKey] Fetching: ${url}`);
+        const response = await fetch(url);
 
         if (!response.ok) {
+          console.log(`[LLMManager.hasApiKey] Response NOT OK for ${provider}: ${response.status}`);
           return false;
         }
 
         const data = await response.json();
         const hasKey = data.hasKey;
-        
+        console.log(`[LLMManager.hasApiKey] Response for ${provider}: hasKey=${hasKey}`);
+
         // Cache the result
         apiKeyCache.set(provider, { value: hasKey, timestamp: Date.now() });
         return hasKey;
       } catch (error) {
-        console.error("Error checking API key:", error);
+        console.error(`[LLMManager.hasApiKey] Error checking API key for ${provider}:`, error);
         return false;
       } finally {
         // Clean up pending request
@@ -237,13 +274,13 @@ export class LLMManager {
       const response = await fetch(config.getApiUrl("/api/llm/has-key/all"));
 
       if (!response.ok) {
-        return { gemini: false, openai: false, anthropic: false };
+        return { gemini: false, openai: false, anthropic: false, xai: false, openrouter: false };
       }
 
       return await response.json();
     } catch (error) {
       console.error("Error checking configured providers:", error);
-      return { gemini: false, openai: false, anthropic: false };
+      return { gemini: false, openai: false, anthropic: false, xai: false, openrouter: false };
     }
   }
 

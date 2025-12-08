@@ -1,0 +1,240 @@
+/**
+ * Search component styles
+ * In-panel search with filters
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Search input wrapper */
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.inputWrapper:hover {
+  border-color: var(--border-secondary);
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15);
+}
+
+/* Search icon */
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* Input field */
+.input {
+  flex: 1;
+  padding: 10px 12px 10px 40px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.input:focus {
+  outline: none;
+}
+
+/* Clear button */
+.clearButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.clearButton:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Loading spinner */
+.spinner {
+  width: 16px;
+  height: 16px;
+  margin-right: 12px;
+  border: 2px solid var(--border-primary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Filters row */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Filter chip */
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filterChip:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.filterChip.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.filterChip.active:hover {
+  filter: brightness(1.1);
+  border-color: transparent;
+}
+
+.filterChipIcon {
+  display: flex;
+  align-items: center;
+}
+
+.filterChipRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  margin-right: -4px;
+  border-radius: 50%;
+  transition: background-color 0.15s ease;
+}
+
+.filterChip.active .filterChipRemove:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Results info */
+.resultsInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.resultsCount {
+  font-weight: 500;
+}
+
+.resultsSortSelect {
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.resultsSortSelect:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Size variants */
+.container.sm .input {
+  padding: 8px 10px 8px 36px;
+  font-size: 0.8125rem;
+}
+
+.container.sm .searchIcon {
+  left: 10px;
+}
+
+.container.sm .filterChip {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+}
+
+.container.lg .input {
+  padding: 14px 16px 14px 48px;
+  font-size: 1rem;
+}
+
+.container.lg .searchIcon {
+  left: 16px;
+}
+
+.container.lg .filterChip {
+  padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+/* Variants */
+.container.minimal .inputWrapper {
+  background: transparent;
+  border-color: transparent;
+}
+
+.container.minimal .inputWrapper:hover,
+.container.minimal .inputWrapper:focus-within {
+  background: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+/* Keyboard shortcut hint */
+.shortcutHint {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-family: inherit;
+  color: var(--text-secondary);
+}

@@ -106,3 +106,18 @@
     color: #4caf50;
     font-weight: bold;
 }
+
+.initMessage {
+    padding: 24px;
+    color: #888;
+    font-size: 14px;
+    text-align: center;
+}
+
+.errorMessage {
+    padding: 24px;
+    color: #ff6b6b;
+    font-size: 14px;
+    text-align: center;
+    background: rgba(255, 107, 107, 0.1);
+}

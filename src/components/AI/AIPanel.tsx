@@ -1,20 +1,23 @@
 /**
  * AIPanel Component
  * Main AI chat interface - refactored to use extracted hooks
+ * Warp-style design with floating input card
  * 
  * Uses:
  * - useUIState: input, loading, status, dialogs
  * - useSettingsLoader: API keys, models, CWD
  * - useAutoRunMachine: auto-run state machine, task tracking
+ * - useWidgetContext: git branch, command context
+ * - useTermAiEvent: command-started/finished event handlers
  */
-import React, { useState, useEffect, useCallback } from "react";
-import styles from "./AIPanel.module.css";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Rocket,
   Folder,
   GitBranch,
   Paperclip,
+  FolderOpen,
   ArrowUp,
   Pencil,
   Save,
@@ -23,8 +26,10 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
+  Sparkles,
+  ChevronsRight,
 } from "lucide-react";
-import clsx from "clsx";
+import styles from "./AIPanel.module.css";
 
 // Services
 import { LLMManager } from "../../services/LLMManager";
@@ -34,10 +39,6 @@ import { buildSystemPrompt } from "../../utils/promptBuilder";
 import { config } from "../../config";
 import { emit } from "../../events";
 import { isSmallModel } from "../../data/models";
-import {
-  extractSingleCommand,
-  isWriteFileBlock,
-} from "../../utils/commandValidator";
 
 // Hooks
 import { useChatHistory } from "../../hooks/useChatHistory";
@@ -48,7 +49,14 @@ import { useSettingsLoader } from "../../hooks/useSettingsLoader";
 import {
   useAutoRunMachine,
   isCodingCommand,
+  MAX_AUTO_STEPS,
+  MAX_STALLS_BEFORE_ASK,
+  formatOutputMessage,
+  processResponseForCommand,
 } from "../../hooks/useAutoRunMachine";
+import { useWidgetContext } from "../../hooks/useWidgetContext";
+import { useTermAiEvent } from "../../hooks/useTermAiEvent";
+import { useErrorAnalysis } from "../../hooks/useErrorAnalysis";
 
 // Components
 import { ModelSelector } from "./ModelSelector";
@@ -58,10 +66,17 @@ import { SafetyConfirmDialog } from "./SafetyConfirmDialog";
 import { ComplexRequestDialog } from "./ComplexRequestDialog";
 import { CommandPreview } from "./CommandPreview";
 import { TaskCompletionSummary } from "./TaskCompletionSummary";
+import { ErrorFixSuggestion } from "./ErrorFixSuggestion";
+import { LearnSkillDialog } from "./LearnSkillDialog";
+import { TypingIndicator } from "../common";
 
 // Types
 import type { ProviderType } from "../../types";
 import type { ModelSpec } from "../../data/models";
+import type {
+  CommandFinishedPayload,
+  CommandStartedPayload,
+} from "../../events/types";
 
 interface AIPanelProps {
   isOpen: boolean;
@@ -78,6 +93,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   isEmbedded,
   isActive = true,
 }) => {
+  // DEBUG: Log component mount and props
+  console.log('[AIPanel] Component rendering with props:', { isOpen, sessionId, isEmbedded, isActive });
   // =============================================
   // Local State (panel-specific)
   // =============================================
@@ -93,6 +110,12 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     const saved = localStorage.getItem("termai_preview_mode");
     return saved === "true";
   });
+
+  // Learn skill dialog state
+  const [showLearnSkill, setShowLearnSkill] = useState(false);
+  const [learnSkillCommand, setLearnSkillCommand] = useState<string | null>(null);
+  const [learnSkillOutput, setLearnSkillOutput] = useState<string | undefined>(undefined);
+
 
   // =============================================
   // Chat History Hook
@@ -149,10 +172,15 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   // =============================================
   const {
     isAutoRun,
+    autoRunCount,
+    consecutiveStalls,
     taskSummary,
     toggleAutoRun,
     stopAutoRun,
     dismissSummary,
+    addTaskStep,
+    setRunningCommandId,
+    setConsecutiveStalls,
     incrementAutoRunCount,
   } = useAutoRunMachine({
     sessionId,
@@ -161,6 +189,21 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     setAgentStatus,
     analyzeAndLearn,
   });
+
+  // =============================================
+  // Widget Context Hook
+  // =============================================
+  const {
+    gitBranch,
+    hasContext,
+    commandCount,
+  } = useWidgetContext({
+    sessionId: sessionId || "default",
+    autoFetchGit: true,
+  });
+
+  // Auto-retry timeout ref
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // =============================================
   // Safety Check Hook
@@ -180,6 +223,79 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
   // Include safety confirm in needsAttention calculation
   const actualNeedsAttention = needsAttention || showSafetyConfirm;
+
+  // =============================================
+  // Error Analysis Hook (for non-auto-run mode)
+  // =============================================
+  const {
+    currentAnalysis,
+    analyzeError,
+    dismissAnalysis,
+  } = useErrorAnalysis({
+    sessionId,
+    cwd: currentCwd,
+    modelId: selectedModelId,
+  });
+
+  // =============================================
+  // Drag & Drop Handlers
+  // =============================================
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  }, [isDragging]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    setAgentStatus("Reading dropped files...");
+    let newContent = "";
+    
+    for (const file of files) {
+      if (file.size > 2 * 1024 * 1024) { 
+        setMessages(prev => [...prev, { role: "system", content: `Skipped large file: ${file.name} (>2MB)` }]);
+        continue;
+      }
+
+      try {
+        const text = await file.text();
+        if (text.includes('\0')) {
+             setMessages(prev => [...prev, { role: "system", content: `Skipped binary file: ${file.name}` }]);
+             continue;
+        }
+        newContent += `\n\n\`\`\`${file.name.split('.').pop() || 'text'} title="${file.name}"\n${text}\n\`\`\`\n`;
+      } catch (err) {
+        console.error(`Failed to read file ${file.name}:`, err);
+      }
+    }
+
+    if (newContent) {
+      setInput((prev) => {
+        const separator = prev ? "\n" : "";
+        return prev + separator + "I have attached the following files for context:" + newContent;
+      });
+      setAgentStatus("Files attached!");
+      setTimeout(() => setAgentStatus(null), 2000);
+    } else {
+        setAgentStatus(null);
+    }
+  }, [setInput, setAgentStatus, setMessages]);
 
   // =============================================
   // Effects
@@ -264,97 +380,267 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   // =============================================
   const processAutoRunResponse = useCallback(
     (response: string) => {
-      const codeBlockRegex = /```(?:bash|sh|shell|zsh)?\n([\s\S]*?)\n```/g;
-      let match;
-      let foundCommand = false;
+      const selectedModel = models.find((m) => m.id === selectedModelId);
+      const useLiteMode = selectedModel ? isSmallModel(selectedModel) : isLiteMode;
 
-      while ((match = codeBlockRegex.exec(response)) !== null) {
-        const blockContent = match[1];
+      const result = processResponseForCommand(
+        response,
+        {
+          sessionId,
+          currentCwd,
+          selectedModelId,
+          models,
+          isLiteMode: useLiteMode,
+        },
+        {
+          getCommandImpact,
+          requestSafetyConfirmation,
+        },
+        {
+          setAgentStatus,
+          onCommandFound: () => {
+            incrementAutoRunCount();
+          },
+          onTaskComplete: (narrative) => {
+            setConsecutiveStalls(0);
+            stopAutoRun("complete", narrative);
+          },
+          onNeedsUserInput: () => {
+            setConsecutiveStalls(0);
+          },
+          onStall: (newStallCount) => {
+            setConsecutiveStalls(newStallCount);
+            if (newStallCount >= MAX_STALLS_BEFORE_ASK) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "system",
+                  content:
+                    "Auto-Run Stalled: No valid command found after multiple attempts. Please provide guidance or try a different approach.",
+                },
+              ]);
+              setAgentStatus("Stalled. Waiting for input...");
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "system",
+                  content:
+                    "No executable command found in your response. Please either:\n1. Provide a specific command to run in a ```bash code block\n2. If the task is complete, say 'Task Complete'\n3. If you need help, say '[ASK_USER]' and explain what you need",
+                },
+              ]);
+              setAgentStatus("Retrying with guidance...");
+            }
+          },
+        },
+        consecutiveStalls
+      );
 
-        if (isWriteFileBlock(response, match.index)) {
-          continue;
+      return result;
+    },
+    [
+      sessionId,
+      currentCwd,
+      selectedModelId,
+      models,
+      isLiteMode,
+      getCommandImpact,
+      requestSafetyConfirmation,
+      setAgentStatus,
+      incrementAutoRunCount,
+      setConsecutiveStalls,
+      stopAutoRun,
+      setMessages,
+      consecutiveStalls,
+      previewEnabled,
+    ]
+  );
+
+  // =============================================
+  // Event Handlers for Command Lifecycle
+  // =============================================
+
+  // Track when commands start
+  useTermAiEvent(
+    "termai-command-started",
+    (payload: CommandStartedPayload) => {
+      if (payload.sessionId === sessionId || !payload.sessionId) {
+        setRunningCommandId(payload.commandId);
+      }
+    },
+    [sessionId, setRunningCommandId]
+  );
+
+  // Handle command finished for auto-run loop
+  useTermAiEvent(
+    "termai-command-finished",
+    async (payload: CommandFinishedPayload) => {
+      if (payload.sessionId !== sessionId && payload.sessionId) return;
+
+      const { command, output, exitCode } = payload;
+      setRunningCommandId(null);
+
+      if (isAutoRun) {
+        addTaskStep({
+          command,
+          exitCode,
+          output: output.substring(0, 500),
+          timestamp: Date.now(),
+        });
+      }
+
+      const outputMsg = formatOutputMessage(command, output, exitCode, isAutoRun);
+      setMessages((prev) => [...prev, { role: "system", content: outputMsg }]);
+
+      // In non-auto-run mode, analyze errors for fix suggestions
+      // and offer to save successful commands as skills
+      if (!isAutoRun) {
+        if (exitCode !== 0) {
+          // Trigger error analysis for failed commands
+          analyzeError(command, output, exitCode);
+        } else {
+          // Successful command - offer to save as learned skill
+          // Only for non-trivial commands (exclude simple navigation, ls, etc.)
+          const trivialPatterns = /^(cd|ls|pwd|clear|exit|echo|cat|head|tail)\b/;
+          if (!trivialPatterns.test(command.trim())) {
+            setLearnSkillCommand(command);
+            setLearnSkillOutput(output.substring(0, 500));
+            setShowLearnSkill(true);
+          }
         }
-
-        const nextCommand = extractSingleCommand(blockContent);
-        if (!nextCommand) continue;
-
-        foundCommand = true;
-        const impact = getCommandImpact(nextCommand);
-        if (impact) {
-          requestSafetyConfirmation({
-            command: nextCommand,
-            sessionId,
-            impact,
-          });
-          setAgentStatus("Waiting for safety confirmation...");
-          return;
-        }
-
-        // If preview mode is enabled, show the command preview
-        if (previewEnabled) {
-          setPendingCommand(nextCommand);
-          setAgentStatus("Review command before execution...");
-          return;
-        }
-
-        // Otherwise execute immediately
-        incrementAutoRunCount();
-        emit("termai-run-command", { command: nextCommand, sessionId });
-        setAgentStatus(
-          isCodingCommand(nextCommand)
-            ? `Coding: ${nextCommand}`
-            : `Terminal: ${nextCommand}`
-        );
         return;
       }
 
-      if (!foundCommand) {
-        if (response.toLowerCase().includes("task complete")) {
-          let narrative = "";
-          const reportMatch = response.match(
-            /Mission Report:([\s\S]*?)Task Complete/i
-          );
-          if (reportMatch) {
-            narrative = reportMatch[1].trim();
-          } else {
-            narrative = response.replace(/task complete/i, "").trim();
-          }
-          stopAutoRun("complete", narrative);
-        } else if (
-          response.includes("[ASK_USER]") ||
-          response.includes("[WAIT]") ||
-          response.includes("[NEED_HELP]")
-        ) {
-          setAgentStatus("Waiting for your input...");
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content:
-                "Auto-Run Stalled: No valid command found. The AI may have output invalid content or is waiting for guidance.",
-            },
-          ]);
-          setAgentStatus("Stalled. Waiting for input...");
-        }
+      if (autoRunCount >= MAX_AUTO_STEPS) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: "Auto-Run limit reached (10 steps). Stopping for safety.",
+          },
+        ]);
+        stopAutoRun("limit");
+        return;
       }
 
-      if (response.includes("[NEW_TAB]")) {
-        emit("termai-new-tab");
-        setAgentStatus("Opening new tab...");
+      setIsLoading(true);
+      setAgentStatus("Analyzing command output...");
+      try {
+        const providerType = localStorage.getItem("termai_provider") || "gemini";
+        const llm = LLMManager.getProvider(providerType, apiKey, selectedModelId);
+        const context =
+          messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
+          `\nSystem Output:\n${outputMsg}`;
+
+        const selectedModel = models.find((m) => m.id === selectedModelId);
+        const useLiteMode = selectedModel ? isSmallModel(selectedModel) : isLiteMode;
+
+        const systemPrompt = buildSystemPrompt({
+          cwd: currentCwd,
+          isAutoRun,
+          isLiteMode: useLiteMode,
+          sessionId: sessionId || "default",
+          includeTerminalContext: hasContext,
+        });
+        const response = await llm.chat(systemPrompt, context, sessionId);
+        setMessages((prev) => [...prev, { role: "ai", content: response }]);
+        processAutoRunResponse(response);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", content: "Error in auto-run loop." },
+        ]);
+        setAgentStatus("Error encountered.");
+      } finally {
+        setIsLoading(false);
       }
     },
     [
       sessionId,
-      getCommandImpact,
-      requestSafetyConfirmation,
-      stopAutoRun,
+      isAutoRun,
+      autoRunCount,
+      selectedModelId,
+      apiKey,
+      messages,
+      currentCwd,
       setMessages,
-      previewEnabled,
-      incrementAutoRunCount,
+      processAutoRunResponse,
+      stopAutoRun,
+      addTaskStep,
+      setRunningCommandId,
+      setIsLoading,
       setAgentStatus,
+      models,
+      isLiteMode,
+      hasContext,
+      analyzeError,
     ]
   );
+
+  // =============================================
+  // Auto-Retry on Stall (debounced)
+  // =============================================
+  useEffect(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
+    if (consecutiveStalls === 1 && isAutoRun && !isLoading) {
+      retryTimeoutRef.current = setTimeout(async () => {
+        setIsLoading(true);
+        setAgentStatus("Retrying with guidance...");
+        try {
+          const providerType = localStorage.getItem("termai_provider") || "gemini";
+          const llm = LLMManager.getProvider(providerType, apiKey, selectedModelId);
+          const context = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+
+          const selectedModel = models.find((m) => m.id === selectedModelId);
+          const useLiteMode = selectedModel ? isSmallModel(selectedModel) : isLiteMode;
+
+          const systemPrompt = buildSystemPrompt({
+            cwd: currentCwd,
+            isAutoRun: true,
+            isLiteMode: useLiteMode,
+            sessionId: sessionId || "default",
+            includeTerminalContext: hasContext,
+          });
+          const response = await llm.chat(systemPrompt, context, sessionId);
+          setMessages((prev) => [...prev, { role: "ai", content: response }]);
+          processAutoRunResponse(response);
+        } catch (error) {
+          console.error("[AIPanel] Retry failed:", error);
+          setAgentStatus("Retry failed. Waiting for input...");
+          setConsecutiveStalls(MAX_STALLS_BEFORE_ASK);
+        } finally {
+          setIsLoading(false);
+        }
+      }, 2000);
+    }
+
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [
+    consecutiveStalls,
+    isAutoRun,
+    isLoading,
+    selectedModelId,
+    apiKey,
+    messages,
+    currentCwd,
+    sessionId,
+    models,
+    isLiteMode,
+    setMessages,
+    processAutoRunResponse,
+    setIsLoading,
+    setAgentStatus,
+    setConsecutiveStalls,
+    hasContext,
+  ]);
 
   // Handle command preview actions
   const handlePreviewExecute = useCallback(() => {
@@ -380,6 +666,15 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     setPendingCommand(null);
     setAgentStatus("Command skipped. Waiting for guidance...");
   }, [pendingCommand, setMessages, setAgentStatus]);
+
+  // Handle error fix suggestion application
+  const handleApplyErrorFix = useCallback(() => {
+    if (!currentAnalysis?.suggestedCommand) return;
+    
+    const command = currentAnalysis.suggestedCommand;
+    dismissAnalysis();
+    emit("termai-run-command", { command, sessionId });
+  }, [currentAnalysis, dismissAnalysis, sessionId]);
 
   // =============================================
   // Save Session Name
@@ -436,6 +731,13 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
     try {
       const providerType = localStorage.getItem("termai_provider") || "gemini";
+      const debugModel = models.find(m => m.id === selectedModelId);
+      console.log('[AIPanel.handleSend] localStorage provider:', providerType);
+      console.log('[AIPanel.handleSend] selectedModelId:', selectedModelId);
+      console.log('[AIPanel.handleSend] model from list:', debugModel?.provider, debugModel?.name);
+      console.log('[AIPanel.handleSend] All localStorage termai keys:', 
+        Object.keys(localStorage).filter(k => k.startsWith('termai_')).map(k => `${k}=${localStorage.getItem(k)}`).join(', ')
+      );
       const llm = LLMManager.getProvider(providerType, apiKey, selectedModelId);
 
       // Fetch relevant skills
@@ -502,115 +804,50 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     "gemini") as ProviderType;
 
   return (
-    <div className={clsx(styles.panel, isEmbedded && styles.embedded)}>
+    <div 
+      className={`
+        ${isEmbedded ? 'w-full h-full border-l-0 shadow-none z-[1]' : 'w-[380px] border-l border-gray-800'}
+        bg-[#0d0d0d] flex flex-col h-full transition-all duration-300 overflow-hidden relative
+      `}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 bg-purple-500/20 backdrop-blur-sm border-2 border-purple-500 border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
+          <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 animate-bounce">
+            <Paperclip size={48} className="text-purple-400" />
+            <div className="text-xl font-bold text-white">Drop files to attach</div>
+            <div className="text-sm text-gray-400">Text and code files supported</div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       {!isEmbedded && (
-        <div className={styles.header}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Rocket size={16} className="text-accent-primary" />
-            <span>TermAI</span>
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between font-semibold text-gray-100">
+          <div className="flex items-center gap-3">
+            <Rocket size={18} className="text-purple-500" />
+            <span className="text-[15px]">AI Assistant</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <label
-              className={styles.autoRunLabel}
-              style={{
-                color: isAutoRun
-                  ? "var(--accent-primary)"
-                  : "var(--text-secondary)",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isAutoRun}
-                onChange={() => toggleAutoRun()}
-                style={{ accentColor: "var(--accent-primary)" }}
-              />
-              Auto-Run
-            </label>
-            {isAutoRun && (
-              <>
-                <button
-                  onClick={() => {
-                    const newValue = !previewEnabled;
-                    setPreviewEnabled(newValue);
-                    localStorage.setItem(
-                      "termai_preview_mode",
-                      String(newValue)
-                    );
-                  }}
-                  className={styles.iconButton}
-                  title={
-                    previewEnabled
-                      ? "Disable command preview (run immediately)"
-                      : "Enable command preview (2s delay)"
-                  }
-                  style={{
-                    color: previewEnabled
-                      ? "var(--accent-primary)"
-                      : "var(--text-secondary)",
-                  }}
-                >
-                  {previewEnabled ? <Eye size={16} /> : <EyeOff size={16} />}
-                </button>
-                <button
-                  onClick={() => stopAutoRun("user")}
-                  className={styles.stopButton}
-                  title="Stop Auto-Run"
-                >
-                  <Square size={14} />
-                  Stop
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => analyzeAndLearn(messages, apiKey)}
-              className={styles.iconButton}
-              title="Learn skills from this session"
-              disabled={isObserving || messages.length < 3}
-              style={{
-                color: isObserving
-                  ? "var(--accent-primary)"
-                  : "var(--text-secondary)",
-              }}
-            >
-              {isObserving ? (
-                <Loader size={16} className={styles.spinner} />
-              ) : (
-                <GraduationCap size={16} />
-              )}
-            </button>
-            <button onClick={onClose} className={styles.closeButton}>
-              <X size={16} />
-            </button>
-          </div>
+          <button onClick={onClose} className="p-1 bg-transparent border-none cursor-pointer text-muted flex items-center justify-center hover:text-text-primary">
+            <X size={16} />
+          </button>
         </div>
       )}
 
       {/* Embedded Header */}
       {isEmbedded && (
-        <div className={styles.header}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flex: 1,
-            }}
-          >
-            <Rocket size={16} className="text-accent-primary" />
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between font-semibold text-gray-100">
+          <div className="flex items-center gap-3 flex-1">
+            <Rocket size={18} className="text-purple-500" />
             {isEditingName ? (
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "4px" }}
-              >
+              <div className="flex items-center gap-2">
                 <input
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
-                  className={styles.input}
-                  style={{
-                    padding: "2px 4px",
-                    height: "24px",
-                    width: "120px",
-                  }}
+                  className="px-2 py-1 h-7 w-[140px] bg-transparent border border-gray-700 rounded text-gray-100 text-[14px] outline-none focus:border-cyan-400/50"
                   autoFocus
                   onKeyDown={(e) =>
                     e.key === "Enter" && handleSaveSessionName()
@@ -619,86 +856,32 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                 />
                 <button
                   onClick={handleSaveSessionName}
-                  className={styles.iconButton}
-                  style={{ color: "var(--success)" }}
+                  className="p-1.5 bg-transparent border-none cursor-pointer flex items-center justify-center text-emerald-500 hover:text-emerald-400"
                 >
-                  <Save size={14} />
+                  <Save size={16} />
                 </button>
               </div>
             ) : (
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                }}
+                className="flex items-center gap-2 cursor-pointer"
                 onClick={() => setIsEditingName(true)}
               >
-                <span style={{ fontWeight: 600, fontSize: "13px" }}>
-                  {sessionName || "TermAI"}
+                <span className="font-semibold text-[15px]">
+                  {sessionName || "AI Assistant"}
                 </span>
-                <Pencil size={12} style={{ opacity: 0.5 }} />
+                <Pencil size={14} className="text-gray-500" />
               </div>
             )}
           </div>
-          <label
-            className={styles.autoRunLabel}
-            style={{
-              color: isAutoRun
-                ? "var(--accent-primary)"
-                : "var(--text-secondary)",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isAutoRun}
-              onChange={() => toggleAutoRun()}
-              style={{ accentColor: "var(--accent-primary)" }}
-            />
-            Auto-Run
-          </label>
-          {isAutoRun && (
-            <>
-              <button
-                onClick={() => {
-                  const newValue = !previewEnabled;
-                  setPreviewEnabled(newValue);
-                  localStorage.setItem("termai_preview_mode", String(newValue));
-                }}
-                className={styles.iconButton}
-                title={
-                  previewEnabled
-                    ? "Disable command preview"
-                    : "Enable command preview"
-                }
-                style={{
-                  color: previewEnabled
-                    ? "var(--accent-primary)"
-                    : "var(--text-secondary)",
-                }}
-              >
-                {previewEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
-              </button>
-              <button
-                onClick={() => stopAutoRun("user")}
-                className={styles.stopButton}
-                title="Stop Auto-Run"
-              >
-                <Square size={14} />
-                Stop
-              </button>
-            </>
-          )}
         </div>
       )}
 
       {/* Content */}
-      <div className={styles.content}>
+      <div className="flex-1 p-6 overflow-y-auto z-[100] flex flex-col gap-4 scrollbar-hide">
         {isCheckingKey ? (
-          <div className={`${styles.message} ${styles.aiMessage}`}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Loader size={16} className={styles.spinner} />
+          <div className="p-4 rounded-lg text-[15px] leading-[1.6] bg-[#1a1a1a] text-gray-300 border border-gray-800 self-start max-w-[90%]">
+            <div className="flex items-center gap-3">
+              <Loader size={18} className="animate-spin text-purple-500" />
               <span>Checking API key configuration...</span>
             </div>
           </div>
@@ -724,21 +907,35 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         {/* Agent Status */}
         {agentStatus && !pendingCommand && (
           <div
-            className={clsx(
-              styles.agentStatus,
-              actualNeedsAttention && styles.waitingForInput
-            )}
+            className={`
+              rounded-lg p-4 my-2 flex items-center gap-3 text-[14px] text-gray-200
+              ${actualNeedsAttention 
+                ? 'bg-purple-500/10 border-2 border-purple-400/40 animate-pulse flex-wrap justify-between' 
+                : 'bg-[#1a1a1a] border border-gray-800'
+              }
+            `}
           >
             {actualNeedsAttention ? (
-              <span style={{ fontSize: "16px" }}>👆</span>
+              <span className="text-lg">👆</span>
             ) : (
-              <Loader size={14} className={styles.spinner} />
+              <Loader size={16} className="animate-spin text-purple-500" />
             )}
             <span>{agentStatus}</span>
             {actualNeedsAttention && (
-              <span className={styles.attentionBadge}>Input Required</span>
+              <span className="inline-flex items-center gap-2 bg-purple-500 text-white text-xs font-semibold px-3 py-1.5 rounded">
+                Input Required
+              </span>
             )}
           </div>
+        )}
+
+        {/* Error Fix Suggestion (non-auto-run mode only) */}
+        {currentAnalysis && !isAutoRun && (
+          <ErrorFixSuggestion
+            analysis={currentAnalysis}
+            onApplyFix={handleApplyErrorFix}
+            onDismiss={dismissAnalysis}
+          />
         )}
 
         {/* Command Preview for Auto-Run */}
@@ -753,8 +950,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
 
         {/* Loading */}
         {isLoading && !agentStatus && (
-          <div className={`${styles.message} ${styles.aiMessage}`}>
-            Thinking...
+          <div className="p-4 rounded-lg text-[15px] leading-[1.6] bg-[#1a1a1a] text-gray-300 border border-gray-800 self-start max-w-[90%]">
+            <TypingIndicator label="Thinking" size="sm" />
           </div>
         )}
 
@@ -762,44 +959,148 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       </div>
 
       {/* Input Area */}
+      {console.log('[AIPanel] hasKey value:', hasKey, '- Input Area will render:', !!hasKey)}
       {hasKey && (
-        <div className={styles.inputWrapper}>
-          <div
-            className={clsx(
-              styles.inputContainer,
-              actualNeedsAttention && styles.needsAttention
-            )}
-          >
-            <div className={styles.contextChips}>
-              <div className={styles.chip}>
-                <Folder size={10} className={styles.chipIcon} />
-                {currentCwd.split("/").pop() || "~"}
-              </div>
-              <div className={styles.chip}>
-                <GitBranch size={10} className={styles.chipIcon} />
-                git:(main)
-              </div>
-            </div>
-            <div
-              style={{ display: "flex", alignItems: "flex-end", gap: "8px" }}
-            >
-              <button className={styles.iconButton}>
+        <div className="p-6 bg-[#0d0d0d]">
+          {console.log('[AIPanel] INSIDE hasKey block - rendering input area')}
+          {/* DEBUG: This should be visible */}
+          <div className="bg-red-500 text-white p-4 mb-4 rounded font-bold text-xl">
+            DEBUG: Action Toolbar should appear below (hasKey={String(hasKey)})
+          </div>
+          {/* Action Toolbar - Above input box */}
+          <div className="flex justify-between items-center p-3 bg-purple-900/50 border-2 border-purple-500 rounded-lg mb-3 gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0d0d0d] border border-gray-700 rounded-md text-gray-400 text-sm cursor-pointer transition-all hover:bg-[#141414] hover:text-purple-400 hover:border-purple-400"
+                type="button"
+                title="Attach file"
+              >
                 <Paperclip size={16} />
               </button>
-              <ModelSelector
-                models={models}
-                selectedModelId={selectedModelId}
-                onSelect={handleModelSelect}
-              />
+              <button
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0d0d0d] border border-gray-700 rounded-md text-gray-400 text-sm cursor-pointer transition-all hover:bg-[#141414] hover:text-purple-400 hover:border-purple-400"
+                type="button"
+                title="Browse files"
+              >
+                <FolderOpen size={16} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-all ${
+                  isAutoRun
+                    ? 'bg-green-500/20 text-green-400 border border-green-500'
+                    : 'bg-transparent border border-transparent text-gray-400 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500'
+                }`}
+                onClick={() => toggleAutoRun()}
+                type="button"
+                title={isAutoRun ? "Auto-run ON - Click to disable" : "Enable auto-run mode"}
+              >
+                <ChevronsRight size={16} />
+                <span>{isAutoRun ? "Auto-run ON" : "Auto-run"}</span>
+              </button>
+              {isAutoRun && (
+                <>
+                  <button
+                    onClick={() => {
+                      const newValue = !previewEnabled;
+                      setPreviewEnabled(newValue);
+                      localStorage.setItem("termai_preview_mode", String(newValue));
+                    }}
+                    className={`p-1.5 rounded-md cursor-pointer transition-all ${
+                      previewEnabled ? 'text-purple-400' : 'text-gray-500'
+                    } hover:bg-[#1a1a1a]`}
+                    type="button"
+                    title={previewEnabled ? "Disable command preview" : "Enable command preview (2s delay)"}
+                  >
+                    {previewEnabled ? <Eye size={16} /> : <EyeOff size={16} />}
+                  </button>
+                  <button
+                    onClick={() => stopAutoRun("user")}
+                    className="flex items-center gap-1 bg-red-500 text-white border-none rounded-md px-2.5 py-1 text-[11px] font-semibold cursor-pointer transition-all hover:bg-red-600 hover:scale-[1.02] active:scale-[0.98]"
+                    type="button"
+                    title="Stop Auto-Run"
+                  >
+                    <Square size={14} />
+                    Stop
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => analyzeAndLearn(messages, apiKey)}
+                className={`p-1.5 rounded-md cursor-pointer transition-all ${
+                  isObserving ? 'text-purple-400' : 'text-gray-500'
+                } hover:bg-[#1a1a1a] hover:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed`}
+                type="button"
+                title="Learn skills from this session"
+                disabled={isObserving || messages.length < 3}
+              >
+                {isObserving ? (
+                  <Loader size={16} className="animate-spin" />
+                ) : (
+                  <GraduationCap size={16} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`
+              bg-[#141414] border-2 rounded-lg p-4 overflow-hidden
+              transition-all duration-200
+              ${actualNeedsAttention
+                ? 'border-purple-400/50 shadow-[0_0_20px_rgba(168,85,247,0.2)] animate-pulse'
+                : 'border-gray-800 hover:border-gray-700 focus-within:border-purple-400/40 focus-within:shadow-[0_0_20px_rgba(168,85,247,0.15)]'
+              }
+            `}
+          >
+            {/* Context chips */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded text-[13px] font-mono whitespace-nowrap border border-emerald-500/20" title={`Current directory: ${currentCwd}`}>
+                <Folder size={14} />
+                {currentCwd.split("/").pop() || "~"}
+              </div>
+              {gitBranch && (
+                <div className="flex items-center gap-2 bg-purple-500/10 text-purple-400 px-3 py-1.5 rounded text-[13px] font-mono whitespace-nowrap border border-purple-400/20" title={`Git branch: ${gitBranch}`}>
+                  <GitBranch size={14} />
+                  git:({gitBranch})
+                </div>
+              )}
+              {hasContext && (
+                <div className="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded text-[13px] font-mono whitespace-nowrap border border-blue-400/20" title={`AI has context from ${commandCount} recent commands`}>
+                  <Sparkles size={14} />
+                  Context
+                </div>
+              )}
+            </div>
+            {/* Input row with textarea */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '12px', width: '100%' }}>
               <textarea
-                className={styles.input}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#f3f4f6',
+                  fontFamily: 'system-ui, sans-serif',
+                  fontSize: '16px',
+                  resize: 'none',
+                  outline: 'none',
+                  minHeight: '28px',
+                  maxHeight: '200px',
+                  lineHeight: 1.6,
+                  overflowY: 'auto',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                }}
                 placeholder="Ask a follow up..."
                 rows={1}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
                   e.target.style.height = "auto";
-                  e.target.style.height = e.target.scrollHeight + "px";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -808,19 +1109,27 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                   }
                 }}
               />
+            </div>
+            {/* Model selector and send button row */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <ModelSelector
+                models={models}
+                selectedModelId={selectedModelId}
+                onSelect={handleModelSelect}
+              />
               <button
                 onClick={() => handleSend()}
                 disabled={isLoading}
-                className={styles.sendButton}
-                style={{
-                  background: input.trim()
-                    ? "var(--accent-primary)"
-                    : "var(--bg-tertiary)",
-                  color: input.trim() ? "white" : "var(--text-secondary)",
-                  cursor: isLoading ? "wait" : "pointer",
-                }}
+                className={`
+                  border-none rounded p-2.5 flex items-center justify-center transition-all min-w-[40px] min-h-[40px] shrink-0
+                  ${input.trim() 
+                    ? 'bg-purple-500 text-white hover:bg-purple-400' 
+                    : 'bg-gray-800 text-gray-500'
+                  }
+                  ${isLoading ? 'cursor-wait' : 'cursor-pointer'}
+                `}
               >
-                <ArrowUp size={16} />
+                <ArrowUp size={18} />
               </button>
             </div>
           </div>
@@ -844,6 +1153,24 @@ export const AIPanel: React.FC<AIPanelProps> = ({
           allowAllOption={pendingSafetyCommand.allowAllOption}
           onConfirm={(allowAll) => handleSafetyConfirm(true, allowAll)}
           onCancel={() => handleSafetyConfirm(false)}
+        />
+      )}
+
+      {/* Learn Skill Dialog */}
+      {showLearnSkill && learnSkillCommand && (
+        <LearnSkillDialog
+          command={learnSkillCommand}
+          output={learnSkillOutput}
+          onSave={() => {
+            setShowLearnSkill(false);
+            setLearnSkillCommand(null);
+            setLearnSkillOutput(undefined);
+          }}
+          onDismiss={() => {
+            setShowLearnSkill(false);
+            setLearnSkillCommand(null);
+            setLearnSkillOutput(undefined);
+          }}
         />
       )}
 

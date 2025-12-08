@@ -1,0 +1,124 @@
+[
+  {
+    "id": "5d2de66e-e6fd-486c-a6af-5131a77ea5a2",
+    "conversationId": "b6cc51b5-a5d4-459a-8403-48fdf06eaf6c",
+    "confidence": 0.85,
+    "problem": {
+      "description": "The user needs to start the TermAi server on a remote Ubuntu 24.04.3 LTS system",
+      "errorPatterns": [],
+      "triggerCommand": "Starting TermAi server...",
+      "messageRange": [
+        0,
+        0
+      ]
+    },
+    "solution": {
+      "description": "SSH into the remote system and start the TermAi server",
+      "steps": [
+        {
+          "type": "command",
+          "content": "ssh normanking@192.168.1.186"
+        },
+        {
+          "type": "command",
+          "content": "Starting TermAi server..."
+        }
+      ],
+      "messageRange": [
+        0,
+        0
+      ],
+      "wasSuccessful": true
+    },
+    "inferredContext": {
+      "os": "linux",
+      "tools": []
+    },
+    "status": "pending"
+  },
+  {
+    "id": "5f52ce5c-8160-4664-b049-fd0e9c7f8ac7",
+    "conversationId": "075e9bf4-f5f4-4315-a326-92fa995165dc",
+    "confidence": 0.8,
+    "problem": {
+      "description": "The user needs to start the TermAi server but is getting an error message or unexpected behavior.",
+      "errorPatterns": [],
+      "triggerCommand": "Starting TermAi server...",
+      "messageRange": [
+        0,
+        0
+      ]
+    },
+    "solution": {
+      "description": "Ensure the necessary dependencies and system setup are in place to start the TermAi server.",
+      "steps": [
+        {
+          "type": "command",
+          "content": "apt list --upgradable"
+        },
+        {
+          "type": "explanation",
+          "content": "Check for available system updates that may be required to run the TermAi server."
+        },
+        {
+          "type": "command",
+          "content": "apt update && apt upgrade -y"
+        },
+        {
+          "type": "explanation",
+          "content": "Apply any pending system updates."
+        },
+        {
+          "type": "check",
+          "content": "Verify the TermAi server can now be started without issues."
+        }
+      ],
+      "messageRange": [
+        0,
+        0
+      ],
+      "wasSuccessful": true
+    },
+    "inferredContext": {
+      "os": "linux",
+      "shell": "bash",
+      "packageManager": "apt",
+      "tools": []
+    },
+    "status": "pending"
+  },
+  {
+    "id": "67b426f3-99f9-49fd-8187-f2ed9a170265",
+    "conversationId": "db398967-ba41-4b0e-8f3a-d02c54095f12",
+    "confidence": 0.8,
+    "problem": {
+      "description": "The user needs to start the TermAi server, but is unable to do so.",
+      "errorPatterns": [],
+      "triggerCommand": "Starting TermAi server...",
+      "messageRange": [
+        0,
+        0
+      ]
+    },
+    "solution": {
+      "description": "The user needs to press Ctrl+K and then Ctrl+U to start the TermAi server.",
+      "steps": [
+        {
+          "type": "command",
+          "content": "^K^U"
+        }
+      ],
+      "messageRange": [
+        0,
+        0
+      ],
+      "wasSuccessful": true
+    },
+    "inferredContext": {
+      "os": "linux",
+      "shell": "bash",
+      "tools": []
+    },
+    "status": "pending"
+  }
+]

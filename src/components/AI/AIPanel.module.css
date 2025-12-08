@@ -418,3 +418,124 @@
   background: var(--ai-primary);
   transition: width 0.1s linear;
 }
+
+/* Action Toolbar - sits above input box */
+.actionToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--ai-border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.toolbarLeft,
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--ai-border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbarBtn:hover {
+  background: var(--bg-secondary);
+  color: var(--ai-primary);
+  border-color: var(--ai-primary);
+}
+
+.autoRunBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.autoRunBtn:hover {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.autoRunBtn.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--success);
+  border-color: var(--success);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.previewBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.previewBtn:hover {
+  background: var(--bg-tertiary);
+}
+
+.previewBtn.active {
+  color: var(--ai-primary);
+}
+
+.previewBtn.inactive {
+  color: var(--text-secondary);
+}
+
+.learnBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.learnBtn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--ai-primary);
+}
+
+.learnBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.learnBtn.observing {
+  color: var(--ai-primary);
+}

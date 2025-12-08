@@ -6,22 +6,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **TermAI** is an AI-powered terminal assistant built with React + TypeScript frontend and Node.js/Express backend. It bridges natural language and command-line operations with features including:
 
-- Multi-AI provider support (Gemini, OpenAI, Claude, Ollama, OpenRouter)
+- Multi-AI provider support (Gemini, OpenAI, Claude, xAI, Ollama, OpenRouter)
 - Skill learning system that remembers successful command patterns
 - Auto-run mode for autonomous command execution
 - Block-based terminal output with modern UI
 - Interactive PTY support for SSH and other real-time commands
+- **CLI launcher** (`termai`) to run from any directory
 - Docker deployment support
+
+## UI Layout
+
+The UI is organized as a vertical split:
+- **Terminal (TOP)**: Command blocks, output display, direct input
+- **AI Panel (BOTTOM)**: Chat interface, model selector, auto-run controls
+- **Resizable**: Drag the divider to adjust panel sizes
 
 ## Architecture
 
 ### Client-Server Model
 
 ```
+CLI (bin/termai.cjs)
+     │
+     │  Captures CWD, sets TERMAI_LAUNCH_CWD env var
+     │
+     ▼
 Frontend (React + Vite)          Backend (Express + Socket.IO)
      Port: 5173                         Port: 3001
          │                                   │
          ├── REST API ──────────────────────►├── /api/execute (commands)
+         ├── REST API ──────────────────────►├── /api/initial-cwd (CLI launch dir)
          ├── REST API ──────────────────────►├── /api/llm/* (AI proxy)
          ├── REST API ──────────────────────►├── /api/knowledge/* (skills)
          ├── REST API ──────────────────────►├── /api/fs/* (file ops)
@@ -34,12 +48,13 @@ Frontend (React + Vite)          Backend (Express + Socket.IO)
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| **AIInputBox** | `components/Terminal/AIInputBox.tsx` | Embedded AI chat in terminal view, handles auto-run, skill learning triggers |
-| **AIPanel** | `components/AI/AIPanel.tsx` | Standalone AI panel (alternative to AIInputBox) |
-| **TerminalSession** | `components/Terminal/TerminalSession.tsx` | Terminal state, command blocks, working directory |
+| **AIPanel** | `components/AI/AIPanel.tsx` | Main AI interface (bottom panel), handles chat, auto-run, command lifecycle |
+| **TerminalSession** | `components/Terminal/TerminalSession.tsx` | Terminal output (top panel), command blocks, fetches initial CWD |
 | **TerminalTabs** | `components/Terminal/TerminalTabs.tsx` | Multi-tab management, session persistence |
-| **Workspace** | `components/Workspace/Workspace.tsx` | Layout container, resizable panels |
+| **Workspace** | `components/Workspace/Workspace.tsx` | Vertical split layout (terminal top, AI bottom), resizable |
 | **SystemOverseer** | `components/Workspace/SystemOverseer.tsx` | Watchdog for stalled commands/AI |
+
+Note: `AIInputBox` is deprecated - `AIPanel` is now the single AI interface.
 
 #### Services (`src/services/`)
 
@@ -50,22 +65,37 @@ Frontend (React + Vite)          Backend (Express + Socket.IO)
 | **SessionManager** | Tab/session persistence to localStorage |
 | **FileSystemService** | Client-side file operations API |
 | **SessionLogService** | Conversation logging |
+| **InitialCwdService** | Fetches launch directory from `/api/initial-cwd` (for CLI support) |
+| **WidgetContextService** | Tracks terminal context (git branch, recent commands) for AI |
+| **BackgroundTerminalService** | Manages background terminal processes |
+| **FlowService** | Visual workflow/flow management |
+| **GhosttyService** | Ghostty terminal emulator integration |
+| **LocalAgentService** | Local agent execution support |
+| **PromptLibraryService** | Saved prompt templates management |
+| **SessionPersistenceService** | Extended session state persistence |
 
 #### Hooks (`src/hooks/`)
 
 | Hook | Description |
 |------|-------------|
 | **useAutoRun** | Auto-run mode logic, command execution |
+| **useAutoRunMachine** | State machine for auto-run lifecycle |
 | **useObserver** | Skill learning observer, triggers after successful tasks |
 | **useSafetyCheck** | Dangerous command detection and confirmation |
 | **useChatHistory** | Message history management |
 | **useTermAiEvent** | Typed event subscription helper |
+| **useUIState** | Centralized UI state management |
+| **useWidgetContext** | Terminal widget context (git, cwd) |
+| **useSettingsLoader** | Settings loading and caching |
+| **useErrorAnalysis** | Error detection and fix suggestions |
+| **useDebounce/useThrottle** | Performance optimization helpers |
 
 #### Backend (`server/`)
 
 | Route | Description |
 |-------|-------------|
 | `/api/execute` | Command execution with cwd tracking |
+| `/api/initial-cwd` | Returns CLI launch directory (from `TERMAI_LAUNCH_CWD` env) |
 | `/api/llm/chat` | Proxied AI chat (keys stored server-side) |
 | `/api/llm/has-key` | Check if API key configured (cached) |
 | `/api/llm/set-key` | Store API key on server |
@@ -73,25 +103,28 @@ Frontend (React + Vite)          Backend (Express + Socket.IO)
 | `/api/fs/*` | File system operations |
 | Socket.IO | Interactive PTY sessions |
 
+#### CLI (`bin/termai.cjs`)
+
+The CLI entry point:
+1. Captures `process.cwd()` as launch directory
+2. Sets `TERMAI_LAUNCH_CWD` environment variable
+3. Starts backend server (port 3001)
+4. Starts frontend dev server (port 5173)
+5. Opens browser automatically
+
 ### Event System
 
-Components communicate via custom browser events prefixed with `termai-`:
+Components communicate via typed custom browser events prefixed with `termai-`. All event types are defined in `src/events/types.ts`.
 
-```typescript
-// Defined in src/events/types.ts
-interface TermAiEvents {
-  'termai-run-command': { command: string; sessionId?: string };
-  'termai-command-started': { command: string; blockId: string; sessionId?: string };
-  'termai-command-output': { output: string; blockId: string; sessionId?: string };
-  'termai-command-finished': { exitCode: number; blockId: string; output: string; sessionId?: string };
-  'termai-ai-thinking': { isThinking: boolean; sessionId?: string };
-  'termai-cwd-changed': { cwd: string; sessionId?: string };
-  'termai-settings-changed': {};
-  'termai-cancel-command': { sessionId?: string };
-}
-```
+**Core event categories:**
+- **Command events**: `run-command`, `command-started`, `command-output`, `command-finished`, `cancel-command`
+- **Session events**: `new-tab`, `restore-session`, `sessions-updated`, `cwd-changed`
+- **AI events**: `ai-thinking`, `ai-needs-input`, `auto-continue`
+- **Settings events**: `settings-changed`, `fetch-models`, `theme-changed`, `toast`
+- **Widget context**: `git-info`, `context-updated`
+- **Background terminals**: `background-started`, `background-output`, `background-exit`
 
-Events are scoped by `sessionId` to support multiple terminal tabs.
+Events are scoped by `sessionId` to support multiple terminal tabs. Use `useTermAiEvent` hook for typed subscriptions.
 
 ### Skill Learning System
 
@@ -137,6 +170,11 @@ npm run build
 
 # Lint
 npm run lint
+
+# CLI usage (after setting up global wrapper)
+termai              # Start in current directory
+termai --help       # Show help
+termai --version    # Show version
 ```
 
 ## Code Patterns

@@ -1,0 +1,344 @@
+/* SaveFlowDialog - Flow save dialog with folder selection */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  width: 420px;
+  max-width: 90vw;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #313244);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-primary, #cdd6f4);
+}
+
+.content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--text-secondary, #a6adc8);
+  font-size: 11px;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 14px;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-color, #6366f1);
+}
+
+.input::placeholder {
+  color: var(--text-secondary, #a6adc8);
+}
+
+/* Folder Selector */
+.folderSelector {
+  position: relative;
+}
+
+.folderButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+
+.folderButton:hover {
+  border-color: var(--accent-color, #6366f1);
+}
+
+.folderButton span {
+  flex: 1;
+}
+
+.folderButton svg:last-child {
+  color: var(--text-secondary, #a6adc8);
+  transition: transform 0.15s ease;
+}
+
+.rotated {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  padding: 4px;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.dropdownItem:hover {
+  background: var(--bg-tertiary, #181825);
+}
+
+.dropdownItem.selected {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.dropdownItem span {
+  flex: 1;
+}
+
+.dropdownItem svg:first-child {
+  color: var(--accent-color, #6366f1);
+}
+
+.dropdownItem svg:last-child {
+  color: var(--success-color, #22c55e);
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--border-color, #313244);
+  margin: 4px 0;
+}
+
+.createFolderBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--accent-color, #6366f1);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.createFolderBtn:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.newFolderInput {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.newFolderInput input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid var(--accent-color, #6366f1);
+  border-radius: 6px;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 13px;
+}
+
+.newFolderInput input:focus {
+  outline: none;
+}
+
+.newFolderInput button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.newFolderInput button:hover {
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-primary, #cdd6f4);
+}
+
+.newFolderInput button:first-of-type:hover {
+  color: var(--success-color, #22c55e);
+}
+
+.newFolderInput button:last-of-type:hover {
+  color: var(--error-color, #ef4444);
+}
+
+/* Preview */
+.preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #181825);
+  border-radius: 8px;
+}
+
+.previewLabel {
+  font-size: 12px;
+  color: var(--text-secondary, #a6adc8);
+}
+
+.previewPath {
+  flex: 1;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-color, #6366f1);
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #313244);
+}
+
+.cancelBtn {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color, #313244);
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelBtn:hover {
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-primary, #cdd6f4);
+}
+
+.saveBtn {
+  padding: 10px 20px;
+  border: none;
+  background: var(--accent-color, #6366f1);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: #5558e8;
+}
+
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

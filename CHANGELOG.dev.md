@@ -4,6 +4,149 @@ This file tracks development progress for agentic coding sessions. Update after 
 
 ---
 
+## Session: 2025-12-04 (Learned Skills as Flow Nodes)
+
+### Completed
+
+- [x] **Learned Skills System for TermFlow**
+  - Users can now save successful commands as reusable "Learned Skills"
+  - Skills can be added as drag-and-drop nodes in TermFlow automation engine
+  
+- [x] **New Types & Data Structures**
+  - Added `learned-skill` to `FlowNodeType` union (`src/types/flow.ts`)
+  - Created `LearnedSkillNodeData` interface with skillId, skillName, command, description, variables
+  - Extended `Skill` interface with optional `flowNode?: SkillFlowNode` for flow integration (`src/types/knowledge.ts`)
+  - Added `SkillFlowNode` interface for palette display config
+
+- [x] **LearnedSkillNode Component** (`src/components/Flow/nodes/LearnedSkillNode.tsx`)
+  - Purple-colored node with Sparkles icon
+  - Shows skill name, description, command preview
+  - Detects and displays variable placeholders (`{{variable}}` syntax)
+  - Registered in `nodeTypes` for React Flow
+
+- [x] **LearnSkillDialog Component** (`src/components/AI/LearnSkillDialog.tsx`)
+  - Appears after successful (non-trivial) commands in non-auto-run mode
+  - Allows user to name the skill, add description, edit command
+  - "Suggest variables" button to auto-detect file paths and replace with placeholders
+  - Toggle to enable/disable "Add to TermFlow" (saves flowNode config)
+  - Styled to match existing dialog components
+
+- [x] **Updated NodePalette** (`src/components/Flow/NodePalette.tsx`)
+  - Now has two sections: "Add Nodes" (built-in) and "Learned Skills"
+  - Fetches skills with `flowNode` config from KnowledgeService
+  - Learned skills displayed with purple styling and Sparkles icon
+  - Refresh button to reload skills
+  - Empty state message when no skills saved yet
+
+- [x] **AIPanel Integration** (`src/components/AI/AIPanel.tsx`)
+  - Added state for learn skill dialog (`showLearnSkill`, `learnSkillCommand`, `learnSkillOutput`)
+  - Triggers LearnSkillDialog after successful commands (exitCode === 0)
+  - Excludes trivial commands (cd, ls, pwd, clear, echo, cat, head, tail)
+  - Only shows in non-auto-run mode
+
+- [x] **FlowCanvas Updates** (`src/components/Flow/FlowCanvas.tsx`)
+  - Updated `getDefaultNodeData()` to handle `learned-skill` type with optional skill data
+  - Updated `onDrop` handler to extract skill data from `application/skill-data` dataTransfer
+  - Properly creates learned skill nodes with all metadata
+
+- [x] **Backend FlowEngine** (`server/services/FlowEngine.js`)
+  - Added `_executeLearnedSkillNode()` method
+  - Executes learned skill commands same as command nodes
+  - Logs skill name/ID for debugging
+  - Supports timeout and cwd options
+
+- [x] **FlowHelpModal Integration** (from previous session)
+  - Added Help button to FlowCanvas toolbar
+  - Comprehensive user guide with 7 sections
+
+### Files Modified
+- `src/types/flow.ts` - Added `learned-skill` type and `LearnedSkillNodeData`
+- `src/types/knowledge.ts` - Added `SkillFlowNode` interface, updated `Skill` interface
+- `src/components/Flow/nodes/LearnedSkillNode.tsx` - New file
+- `src/components/Flow/nodes/index.ts` - Export LearnedSkillNode, add to nodeTypes
+- `src/components/AI/LearnSkillDialog.tsx` - New file
+- `src/components/Flow/NodePalette.tsx` - Added learned skills section
+- `src/components/Flow/NodePalette.module.css` - Added styles for learned skills
+- `src/components/AI/AIPanel.tsx` - Integrated LearnSkillDialog
+- `src/components/Flow/FlowCanvas.tsx` - Handle learned-skill drops
+- `server/services/FlowEngine.js` - Added learned skill node executor
+
+### In Progress
+
+- [ ] **Textarea Text Wrapping Issue**
+  - User reports text going behind paperclip and model selector
+  - Attempted fixes in AIPanel.tsx (separate rows for textarea and model selector)
+  - Added word-wrap CSS to AIInputBox.module.css
+  - Issue persists - need more debugging with browser dev tools
+
+### Build Status
+- TypeScript: Passing
+- Vite Build: Passing
+
+---
+
+## Session: 2025-12-03 (UI Overhaul - Warp Style)
+
+### Completed
+
+- [x] **Tailwind CSS Setup**
+  - Installed `tailwindcss`, `autoprefixer`, `@tailwindcss/postcss`
+  - Created `tailwind.config.js` with custom Warp-style color palette
+  - Updated `postcss.config.js` for Tailwind v4 compatibility
+  - Added custom colors: `dark`, `surface`, `accent` (cyan), `purple`, semantic colors
+  - Added custom shadows: `cyan-glow`, `purple-glow`
+  - Added scrollbar hiding utility class
+
+- [x] **Component Refactoring (CSS Modules → Tailwind)**
+  - `AppShell.tsx` - Main shell layout with dark background
+  - `Sidebar.tsx` - Warp-style navigation with gradient effects
+  - `Block.tsx` - Command blocks with left accent border on hover, cyan glow
+  - `TerminalSession.tsx` - Terminal output area with scrollbar hiding
+  - `InputArea.tsx` - Floating input card with cyan glow shadow on focus
+  - `AIPanel.tsx` - Chat interface with gradient chips, pulsing attention states
+  - `TerminalTabs.tsx` - Tab bar with active state indicators
+  - `Workspace.tsx` - Vertical split layout with resize handle
+  - `ChatMessage.tsx` - Gradient message bubbles with code block styling
+
+- [x] **Warp-Style Design Elements**
+  - Left accent borders on command blocks (cyan on hover)
+  - Cyan glow shadows on focus states
+  - Gradient backgrounds for user/AI messages
+  - Context chips with colored borders (cyan for CWD, purple for git, green for context)
+  - Animated attention states for when AI needs user input
+  - Dark theme with `#050505` base, `#0f1117` surfaces
+
+- [x] **UI Improvements (Font Size & Navigation)**
+  - Increased base body font to `15px` with `1.6` line-height
+  - Block command text: `text-base` (16px)
+  - Terminal input: `text-base` (16px)
+  - AI chat messages: `text-base` (16px)
+  - Code blocks: `text-sm` (14px)
+  - **Made theme toggle more visible** - Now a labeled button showing "Dark"/"Light" with icon
+  - Toolbar height increased to 40px with better spacing
+  - Larger icon sizes and button hit targets
+
+### Files Modified
+- `tailwind.config.js` - New file with Warp color palette
+- `postcss.config.js` - Updated for Tailwind
+- `src/index.css` - Tailwind directives + increased base font sizes
+- `src/components/Shell/AppShell.tsx` - Tailwind classes
+- `src/components/Shell/Sidebar.tsx` - Tailwind classes
+- `src/components/Terminal/Block.tsx` - Tailwind classes, larger fonts
+- `src/components/Terminal/TerminalSession.tsx` - Tailwind classes
+- `src/components/Terminal/InputArea.tsx` - Tailwind classes, larger fonts
+- `src/components/Terminal/TerminalTabs.tsx` - Tailwind classes
+- `src/components/AI/AIPanel.tsx` - Tailwind classes, larger fonts, visible theme toggle
+- `src/components/AI/ChatMessage.tsx` - Tailwind classes, larger fonts
+- `src/components/Workspace/Workspace.tsx` - Tailwind classes, prominent theme toggle button
+
+### Build Status
+- TypeScript: Passing
+- Vite Build: Passing
+- CSS size reduced from ~85KB to ~81KB (removed unused CSS module styles)
+
+---
+
 ## Session: 2025-12-03 (Continued)
 
 ### Completed

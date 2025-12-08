@@ -1,0 +1,239 @@
+/**
+ * Popover component styles
+ * CSS-only popover implementation (no Floating UI)
+ */
+
+.popoverContainer {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.trigger:focus {
+  outline: none;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.popover {
+  position: absolute;
+  z-index: 1000;
+  min-width: 200px;
+  max-width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.popover.open {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+/* Placement variations */
+.popover.top {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  margin-bottom: 8px;
+}
+
+.popover.top.open {
+  transform: translateX(-50%) scale(1);
+}
+
+.popover.topStart {
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+}
+
+.popover.topEnd {
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+}
+
+.popover.bottom {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  margin-top: 8px;
+}
+
+.popover.bottom.open {
+  transform: translateX(-50%) scale(1);
+}
+
+.popover.bottomStart {
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+}
+
+.popover.bottomEnd {
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+}
+
+.popover.left {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%) scale(0.95);
+  margin-right: 8px;
+}
+
+.popover.left.open {
+  transform: translateY(-50%) scale(1);
+}
+
+.popover.right {
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%) scale(0.95);
+  margin-left: 8px;
+}
+
+.popover.right.open {
+  transform: translateY(-50%) scale(1);
+}
+
+/* Arrow */
+.arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  transform: rotate(45deg);
+}
+
+.popover.top .arrow,
+.popover.topStart .arrow,
+.popover.topEnd .arrow {
+  bottom: -7px;
+  border-top: none;
+  border-left: none;
+}
+
+.popover.top .arrow {
+  left: 50%;
+  margin-left: -6px;
+}
+
+.popover.topStart .arrow {
+  left: 16px;
+}
+
+.popover.topEnd .arrow {
+  right: 16px;
+}
+
+.popover.bottom .arrow,
+.popover.bottomStart .arrow,
+.popover.bottomEnd .arrow {
+  top: -7px;
+  border-bottom: none;
+  border-right: none;
+}
+
+.popover.bottom .arrow {
+  left: 50%;
+  margin-left: -6px;
+}
+
+.popover.bottomStart .arrow {
+  left: 16px;
+}
+
+.popover.bottomEnd .arrow {
+  right: 16px;
+}
+
+.popover.left .arrow {
+  right: -7px;
+  top: 50%;
+  margin-top: -6px;
+  border-bottom: none;
+  border-left: none;
+}
+
+.popover.right .arrow {
+  left: -7px;
+  top: 50%;
+  margin-top: -6px;
+  border-top: none;
+  border-right: none;
+}
+
+/* Content */
+.header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.content {
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Close button */
+.closeButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.closeButton:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Backdrop for click-outside detection */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}

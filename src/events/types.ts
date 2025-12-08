@@ -69,9 +69,39 @@ export interface ToastPayload {
   type?: "success" | "error" | "info" | "warning";
 }
 
+export interface GitInfoPayload {
+  branch: string | null;
+  status?: string | null;
+  sessionId?: string | undefined;
+}
+
+export interface WidgetContextUpdatedPayload {
+  sessionId: string;
+}
+
+// Background Terminal Events
+export interface BackgroundStartedPayload {
+  terminalId: string;
+  command: string;
+  type: string;
+  sessionId?: string | undefined;
+}
+
+export interface BackgroundOutputPayload {
+  terminalId: string;
+  output: string;
+}
+
+export interface BackgroundExitPayload {
+  terminalId: string;
+  exitCode: number;
+  command: string;
+  duration: number;
+}
+
 // ===========================================
 // Event Map
-// ===========================================
+// =========================================== 
 
 export interface TermAiEvents {
   // Command Events
@@ -97,6 +127,15 @@ export interface TermAiEvents {
   "termai-fetch-models": FetchModelsPayload;
   "termai-theme-changed": ThemeChangedPayload;
   "termai-toast": ToastPayload;
+
+  // Widget Context Events
+  "termai-git-info": GitInfoPayload;
+  "termai-context-updated": WidgetContextUpdatedPayload;
+
+  // Background Terminal Events
+  "termai-background-started": BackgroundStartedPayload;
+  "termai-background-output": BackgroundOutputPayload;
+  "termai-background-exit": BackgroundExitPayload;
 }
 
 // ===========================================
@@ -144,5 +183,10 @@ declare global {
     "termai-fetch-models": CustomEvent<FetchModelsPayload>;
     "termai-theme-changed": CustomEvent<ThemeChangedPayload>;
     "termai-toast": CustomEvent<ToastPayload>;
+    "termai-git-info": CustomEvent<GitInfoPayload>;
+    "termai-context-updated": CustomEvent<WidgetContextUpdatedPayload>;
+    "termai-background-started": CustomEvent<BackgroundStartedPayload>;
+    "termai-background-output": CustomEvent<BackgroundOutputPayload>;
+    "termai-background-exit": CustomEvent<BackgroundExitPayload>;
   }
 }

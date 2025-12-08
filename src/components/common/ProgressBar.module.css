@@ -1,0 +1,113 @@
+/**
+ * ProgressBar Styles
+ */
+
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.withLabel {
+  gap: 12px;
+}
+
+.progressBar {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Size variants */
+.sm {
+  height: 4px;
+}
+
+.md {
+  height: 6px;
+}
+
+.lg {
+  height: 10px;
+}
+
+/* Fill bar */
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+/* Color variants */
+.default .fill {
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary, var(--accent-primary)) 100%);
+}
+
+.success .fill {
+  background: linear-gradient(90deg, var(--success) 0%, #4ade80 100%);
+}
+
+.warning .fill {
+  background: linear-gradient(90deg, var(--warning) 0%, #fbbf24 100%);
+}
+
+.error .fill {
+  background: linear-gradient(90deg, var(--error) 0%, #f87171 100%);
+}
+
+/* Indeterminate animation */
+.indeterminate .fill {
+  width: 30% !important;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(200%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Label */
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Shimmer effect on fill */
+.fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

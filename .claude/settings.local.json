@@ -9,7 +9,19 @@
       "Bash(ps:*)",
       "Bash(node index.js:*)",
       "Bash(npm install:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"require(''./routes/ingestion'')\")",
+      "Bash(node -e:*)",
+      "Bash(timeout 5 node:*)",
+      "Bash(ufw status:*)",
+      "Bash(grep:*)",
+      "Bash(ip addr:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

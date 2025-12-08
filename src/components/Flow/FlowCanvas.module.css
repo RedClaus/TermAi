@@ -1,0 +1,178 @@
+/* FlowCanvas - Main flow editor canvas */
+
+.container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: var(--bg-primary, #11111b);
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.flowName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.folderBadge {
+  padding: 3px 8px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-color, #6366f1);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowNameInput {
+  width: 140px;
+  padding: 6px 8px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 4px;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.flowNameInput:focus {
+  outline: none;
+  border-color: var(--accent-color, #6366f1);
+}
+
+.dirtyIndicator {
+  color: var(--warning-color, #f59e0b);
+  font-weight: bold;
+}
+
+.toolbarDivider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color, #313244);
+  margin: 0 4px;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-primary, #cdd6f4);
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.runBtn {
+  color: var(--success-color, #22c55e);
+}
+
+.runBtn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success-color, #22c55e);
+}
+
+.stopBtn {
+  color: var(--error-color, #ef4444);
+}
+
+.stopBtn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error-color, #ef4444);
+}
+
+.activeBtn {
+  background: var(--bg-tertiary, #181825);
+  color: var(--accent-color, #6366f1);
+}
+
+/* Palette Panel */
+.palettePanel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* React Flow Controls */
+.controls {
+  background: var(--bg-secondary, #1e1e2e) !important;
+  border: 1px solid var(--border-color, #313244) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.controls button {
+  background: transparent !important;
+  border-color: var(--border-color, #313244) !important;
+  color: var(--text-secondary, #a6adc8) !important;
+}
+
+.controls button:hover {
+  background: var(--bg-tertiary, #181825) !important;
+}
+
+/* MiniMap */
+.minimap {
+  background: var(--bg-secondary, #1e1e2e) !important;
+  border: 1px solid var(--border-color, #313244) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* React Flow global overrides */
+:global(.react-flow__background) {
+  background-color: var(--bg-primary, #11111b) !important;
+}
+
+:global(.react-flow__edge-path) {
+  stroke: var(--accent-color, #6366f1) !important;
+}
+
+:global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--text-primary, #cdd6f4) !important;
+  stroke-width: 3px !important;
+}
+
+:global(.react-flow__handle) {
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid var(--accent-color, #6366f1) !important;
+  background: var(--bg-secondary, #1e1e2e) !important;
+}
+
+:global(.react-flow__handle:hover) {
+  background: var(--accent-color, #6366f1) !important;
+}
+
+:global(.react-flow__attribution) {
+  display: none;
+}

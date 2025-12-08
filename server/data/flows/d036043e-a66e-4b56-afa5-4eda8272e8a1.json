@@ -1,0 +1,97 @@
+{
+  "name": "📄 Document Analysis to Markdown Report",
+  "nodes": [
+    {
+      "id": "1",
+      "type": "file-op",
+      "data": {
+        "operation": "read",
+        "path": "./input-docs/requirements.txt",
+        "filePath": "/home/normanking/github/TermAi/CHANGELOG.dev.md",
+        "status": "failed"
+      },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
+      "measured": {
+        "width": 280,
+        "height": 95
+      },
+      "selected": false
+    },
+    {
+      "id": "2",
+      "type": "ai-reasoning",
+      "data": {
+        "model": "gpt-4-turbo",
+        "prompt": "You are a Senior Technical Writer. Analyze the following document content and output a comprehensive report.\n\nREQUIREMENTS:\n1. Use standard Markdown formatting (H1, H2, bullet points).\n2. Use relevant Emojis for every section header (e.g., 📊 Analysis, ⚠️ Risks).\n3. Include a purely executive summary at the top.\n\nDOCUMENT CONTENT:\n{{1.content}}",
+        "status": "failed",
+        "provider": "anthropic"
+      },
+      "position": {
+        "x": 100,
+        "y": 250
+      },
+      "measured": {
+        "width": 280,
+        "height": 95
+      },
+      "selected": false
+    },
+    {
+      "id": "3",
+      "type": "file-op",
+      "data": {
+        "operation": "write",
+        "path": "./reports/analysis-report.md",
+        "content": "{{2.response}}",
+        "status": "pending"
+      },
+      "position": {
+        "x": 100,
+        "y": 400
+      },
+      "measured": {
+        "width": 180,
+        "height": 95
+      }
+    },
+    {
+      "id": "4",
+      "type": "cmd",
+      "data": {
+        "command": "echo \"✅ Report generated at ./reports/analysis-report.md\"",
+        "status": "pending"
+      },
+      "position": {
+        "x": 100,
+        "y": 550
+      },
+      "measured": {
+        "width": 151,
+        "height": 22
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "1",
+      "target": "2",
+      "id": "e1-2"
+    },
+    {
+      "source": "2",
+      "target": "3",
+      "id": "e2-3"
+    },
+    {
+      "source": "3",
+      "target": "4",
+      "id": "e3-4"
+    }
+  ],
+  "id": "d036043e-a66e-4b56-afa5-4eda8272e8a1",
+  "createdAt": 1764963803835,
+  "updatedAt": 1765044190180
+}

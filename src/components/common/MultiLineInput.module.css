@@ -1,0 +1,174 @@
+/**
+ * MultiLineInput component styles
+ * Auto-expanding textarea
+ */
+
+.container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Label */
+.label {
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.label.required::after {
+  content: " *";
+  color: var(--error);
+}
+
+/* Textarea wrapper */
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.inputWrapper:hover {
+  border-color: var(--border-secondary);
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15);
+}
+
+.inputWrapper.error {
+  border-color: var(--error);
+}
+
+.inputWrapper.error:focus-within {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.inputWrapper.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Textarea */
+.textarea {
+  flex: 1;
+  min-height: 80px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: hidden;
+}
+
+.textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.textarea:focus {
+  outline: none;
+}
+
+.textarea:disabled {
+  cursor: not-allowed;
+}
+
+/* Size variants */
+.sm .textarea {
+  min-height: 60px;
+  padding: 8px;
+  font-size: 0.8125rem;
+}
+
+.lg .textarea {
+  min-height: 120px;
+  padding: 16px;
+  font-size: 1rem;
+}
+
+/* Character count */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.charCount {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.charCount.warning {
+  color: var(--warning);
+}
+
+.charCount.error {
+  color: var(--error);
+}
+
+/* Error message */
+.errorMessage {
+  font-size: 0.75rem;
+  color: var(--error);
+}
+
+/* Helper text */
+.helperText {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* Submit button (optional) */
+.submitButton {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* With submit button padding */
+.hasSubmitButton .textarea {
+  padding-right: 48px;
+}
+
+/* Monospace variant */
+.monospace .textarea {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 0.8125rem;
+}

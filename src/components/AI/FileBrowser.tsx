@@ -16,9 +16,13 @@ import {
   Image,
   Loader,
   Check,
+  HardDrive,
+  FolderRoot,
+  FolderHeart,
+  FolderCog,
 } from "lucide-react";
 import styles from "./FileBrowser.module.css";
-import { FileSystemService, type FileEntry } from "../../services/FileSystemService";
+import { FileSystemService, type FileEntry, type DriveEntry } from "../../services/FileSystemService";
 
 interface FileBrowserProps {
   isOpen: boolean;
@@ -106,6 +110,44 @@ FileItem.displayName = "FileItem";
 /**
  * FileBrowser Component
  */
+// Drive icon based on type
+const getDriveIcon = (type: DriveEntry["type"]) => {
+  switch (type) {
+    case "drive":
+      return <HardDrive size={16} className={styles.driveIcon} />;
+    case "root":
+      return <FolderRoot size={16} className={styles.rootIcon} />;
+    case "home":
+      return <FolderHeart size={16} className={styles.homeIcon} />;
+    case "project":
+      return <FolderCog size={16} className={styles.projectIcon} />;
+    case "mount":
+    default:
+      return <HardDrive size={16} className={styles.mountIcon} />;
+  }
+};
+
+/**
+ * Drive Item
+ */
+const DriveItem = memo<{
+  drive: DriveEntry;
+  onNavigate: () => void;
+}>(({ drive, onNavigate }) => (
+  <div className={styles.driveItem} onClick={onNavigate}>
+    <div className={styles.driveInfo}>
+      {getDriveIcon(drive.type)}
+      <div className={styles.driveDetails}>
+        <span className={styles.driveName}>{drive.name}</span>
+        <span className={styles.drivePath}>{drive.path}</span>
+      </div>
+    </div>
+    <ChevronRight size={14} className={styles.navArrow} />
+  </div>
+));
+
+DriveItem.displayName = "DriveItem";
+
 export const FileBrowser: React.FC<FileBrowserProps> = ({
   isOpen,
   onClose,
@@ -116,9 +158,26 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 }) => {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [drives, setDrives] = useState<DriveEntry[]>([]);
+  const [showDrives, setShowDrives] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load drives
+  const loadDrives = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const driveList = await FileSystemService.getDrives();
+      setDrives(driveList);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load drives");
+      setDrives([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Load files for current path
   const loadFiles = useCallback(async (path: string) => {
@@ -133,6 +192,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
         return a.name.localeCompare(b.name);
       });
       setFiles(entries);
+      setShowDrives(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load files");
       setFiles([]);
@@ -143,16 +203,17 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 
   // Load files when path changes
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !showDrives) {
       loadFiles(currentPath);
     }
-  }, [isOpen, currentPath, loadFiles]);
+  }, [isOpen, currentPath, loadFiles, showDrives]);
 
   // Reset when opened
   useEffect(() => {
     if (isOpen) {
       setCurrentPath(initialPath);
       setSelectedFiles([]);
+      setShowDrives(false);
     }
   }, [isOpen, initialPath]);
 
@@ -163,17 +224,36 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 
   // Go up one level
   const goUp = useCallback(() => {
+    if (showDrives) return; // Already at root
+    
     const parts = currentPath.split("/").filter(Boolean);
-    if (parts.length > 0) {
+    if (parts.length > 1) {
       parts.pop();
-      const newPath = parts.length > 0 ? "/" + parts.join("/") : "/";
-      navigateTo(newPath === "/" && currentPath.startsWith("~") ? "~" : newPath);
+      const newPath = "/" + parts.join("/");
+      navigateTo(newPath);
+    } else {
+      // At top level, show drives
+      setShowDrives(true);
+      loadDrives();
     }
-  }, [currentPath, navigateTo]);
+  }, [currentPath, navigateTo, showDrives, loadDrives]);
 
   // Go to home
   const goHome = useCallback(() => {
+    setShowDrives(false);
     navigateTo("~");
+  }, [navigateTo]);
+
+  // Show drives/volumes
+  const showAllDrives = useCallback(() => {
+    setShowDrives(true);
+    loadDrives();
+  }, [loadDrives]);
+
+  // Navigate to a drive
+  const navigateToDrive = useCallback((drive: DriveEntry) => {
+    setShowDrives(false);
+    navigateTo(drive.path);
   }, [navigateTo]);
 
   // Toggle file selection
@@ -231,14 +311,17 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 
         {/* Path bar */}
         <div className={styles.pathBar}>
+          <button className={styles.pathBtn} onClick={showAllDrives} title="Drives">
+            <HardDrive size={16} />
+          </button>
           <button className={styles.pathBtn} onClick={goHome} title="Home">
             <Home size={16} />
           </button>
-          <button className={styles.pathBtn} onClick={goUp} title="Go Up">
+          <button className={styles.pathBtn} onClick={goUp} title="Go Up" disabled={showDrives}>
             <ArrowUp size={16} />
           </button>
           <div className={styles.pathDisplay}>
-            {currentPath}
+            {showDrives ? "Drives & Volumes" : currentPath}
           </div>
         </div>
 
@@ -252,8 +335,24 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           ) : error ? (
             <div className={styles.errorState}>
               <span>{error}</span>
-              <button onClick={() => loadFiles(currentPath)}>Retry</button>
+              <button onClick={() => showDrives ? loadDrives() : loadFiles(currentPath)}>Retry</button>
             </div>
+          ) : showDrives ? (
+            // Show drives/volumes
+            drives.length === 0 ? (
+              <div className={styles.emptyState}>
+                <HardDrive size={32} />
+                <span>No drives found</span>
+              </div>
+            ) : (
+              drives.map((drive) => (
+                <DriveItem
+                  key={drive.path}
+                  drive={drive}
+                  onNavigate={() => navigateToDrive(drive)}
+                />
+              ))
+            )
           ) : files.length === 0 ? (
             <div className={styles.emptyState}>
               <Folder size={32} />

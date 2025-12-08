@@ -1,0 +1,77 @@
+/**
+ * TypingIndicator Styles - Enhanced for visibility
+ * Animated three-dot bounce animation
+ */
+
+.container {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.typing {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.typing span {
+  display: inline-block;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out;
+  animation-fill-mode: both;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
+
+.typing span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+/* Size variants - Made larger */
+.sm span {
+  width: 10px;
+  height: 10px;
+}
+
+.md span {
+  width: 14px;
+  height: 14px;
+}
+
+.lg span {
+  width: 18px;
+  height: 18px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #a5b4fc;
+  letter-spacing: 0.5px;
+}
+
+/* Bouncing animation */
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

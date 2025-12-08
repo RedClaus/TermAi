@@ -11,6 +11,12 @@ export interface FileEntry {
   path: string;
 }
 
+export interface DriveEntry {
+  name: string;
+  path: string;
+  type: "drive" | "root" | "home" | "mount" | "project";
+}
+
 export class FileSystemService {
   /**
    * Read file contents
@@ -80,5 +86,20 @@ export class FileSystemService {
       const error = await response.json();
       throw new Error(error.error || "Failed to create directory");
     }
+  }
+
+  /**
+   * Get mounted drives/volumes
+   */
+  static async getDrives(): Promise<DriveEntry[]> {
+    const response = await fetch(`${config.apiUrl}/api/fs/drives`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to get drives");
+    }
+
+    const data = await response.json();
+    return data.drives;
   }
 }

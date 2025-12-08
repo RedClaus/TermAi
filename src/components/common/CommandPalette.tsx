@@ -12,6 +12,7 @@ import {
   Moon,
   History,
   GraduationCap,
+  Book,
 } from "lucide-react";
 import styles from "./CommandPalette.module.css";
 import {
@@ -111,6 +112,17 @@ const defaultCommands: Command[] = [
     category: "AI",
     action: () => {
       document.dispatchEvent(new CustomEvent("termai-show-skills"));
+    },
+  },
+  {
+    id: "view-help",
+    title: "Open User Manual",
+    description: "View documentation and help",
+    icon: <Book size={16} />,
+    category: "Help",
+    shortcut: "?",
+    action: () => {
+      document.dispatchEvent(new CustomEvent("termai-show-help"));
     },
   },
 ];

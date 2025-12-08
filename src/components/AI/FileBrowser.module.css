@@ -286,3 +286,83 @@
 .fileList::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
+
+/* Drive Items */
+.driveItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.driveItem:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+.driveInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.driveDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.driveName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.drivePath {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Drive Icons */
+.driveIcon {
+  color: #60a5fa;
+}
+
+.rootIcon {
+  color: #f87171;
+}
+
+.homeIcon {
+  color: #fbbf24;
+}
+
+.projectIcon {
+  color: #34d399;
+}
+
+.mountIcon {
+  color: #a78bfa;
+}
+
+/* Disabled state for buttons */
+.pathBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pathBtn:disabled:hover {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}

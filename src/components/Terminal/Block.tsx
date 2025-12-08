@@ -1,7 +1,5 @@
 import { memo, useState, useMemo } from "react";
 import type { BlockData } from "../../types";
-import styles from "./Block.module.css";
-import clsx from "clsx";
 import {
   ChevronRight,
   ChevronDown,
@@ -10,12 +8,13 @@ import {
   SkipForward,
 } from "lucide-react";
 import { emit } from "../../events";
+import { TypingIndicator } from "../common";
 
 interface BlockProps {
   data: BlockData;
-  isSelected?: boolean;
-  onClick?: () => void;
-  defaultCollapsed?: boolean;
+  isSelected?: boolean | undefined;
+  onClick?: (() => void) | undefined;
+  defaultCollapsed?: boolean | undefined;
   sessionId?: string | undefined;
 }
 
@@ -49,6 +48,7 @@ function generateSummary(output: string, exitCode: number): string {
  * Block Component
  * Displays a single command block with collapsible output
  * Memoized to prevent unnecessary re-renders
+ * Warp-style design with left border accent
  */
 export const Block = memo<BlockProps>(
   ({ data, isSelected, onClick, defaultCollapsed = true, sessionId }) => {
@@ -79,45 +79,52 @@ export const Block = memo<BlockProps>(
 
     return (
       <div
-        className={clsx(styles.block, isSelected && styles.selected)}
+        className={`
+          group mb-6 font-mono rounded-lg overflow-hidden
+          border border-gray-800 hover:border-gray-700
+          transition-colors duration-200
+          ${isSelected ? 'border-cyan-400/50' : ''}
+        `}
         onClick={onClick}
       >
-        <div className={styles.header}>
-          <ChevronRight size={14} className={styles.prompt} />
-          <div className={styles.command}>{data.command}</div>
-          <div className={styles.meta}>
+        {/* Header with emerald path and cyan command */}
+        <div className="flex items-center gap-3 bg-[#1a1a1a] px-5 py-4 border-b border-gray-800">
+          <span className="text-[14px] font-semibold font-mono text-emerald-500">{data.cwd}</span>
+          <ChevronRight size={16} className="text-gray-600" />
+          <span className="text-[15px] font-mono text-cyan-400 flex-1">{data.command}</span>
+          <div className="flex items-center gap-3">
             {/* Status indicator */}
             {!data.isLoading && (
-              <span className={styles.status}>
+              <span className="inline-flex items-center">
                 {data.exitCode === 0 ? (
-                  <CheckCircle size={12} className={styles.successIcon} />
+                  <CheckCircle size={14} className="text-emerald-500" />
                 ) : (
-                  <XCircle size={12} className={styles.errorIcon} />
+                  <XCircle size={14} className="text-red-500" />
                 )}
               </span>
             )}
-            {formattedTime} • {data.cwd}
+            <span className="text-xs text-gray-500">{formattedTime}</span>
           </div>
         </div>
 
-        {/* Collapsible output section */}
+        {/* Output section */}
         <div
-          className={clsx(
-            styles.output,
-            data.exitCode !== 0 && styles.error,
-            isCollapsed && styles.collapsed,
-          )}
+          className={`
+            px-5 py-4 font-mono bg-[#0f0f0f]
+            ${data.exitCode !== 0 ? 'border-l-4 border-red-500' : ''}
+            ${isCollapsed ? 'max-h-[180px] overflow-hidden relative' : ''}
+          `}
         >
+          {/* Gradient fade for collapsed state */}
+          {isCollapsed && (
+            <div className="absolute bottom-12 left-0 right-0 h-12 bg-gradient-to-t from-[#0f0f0f] to-transparent pointer-events-none" />
+          )}
+          
           {data.isLoading ? (
-            <div className={styles.loadingContainer}>
-              <div className={styles.loading}>
-                <span className={styles.dot}>.</span>
-                <span className={styles.dot}>.</span>
-                <span className={styles.dot}>.</span>
-                <span className={styles.loadingText}>Running...</span>
-              </div>
+            <div className="flex items-center justify-between gap-4">
+              <TypingIndicator label="Running" size="sm" />
               <button
-                className={styles.skipBtn}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 border-none rounded-lg text-white text-[14px] font-semibold cursor-pointer transition-all duration-150 whitespace-nowrap"
                 onClick={(e) => {
                   e.stopPropagation();
                   emit("termai-cancel-command", {
@@ -127,27 +134,29 @@ export const Block = memo<BlockProps>(
                 }}
                 title="Skip this command and continue"
               >
-                <SkipForward size={14} />
+                <SkipForward size={16} />
                 Skip
               </button>
             </div>
           ) : (
             <>
-              <pre className={styles.outputText}>{displayOutput}</pre>
+              <pre className={`m-0 whitespace-pre-wrap break-words text-[14px] leading-[1.6] ${data.exitCode !== 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                {displayOutput}
+              </pre>
               {isCollapsible && (
                 <button
-                  className={styles.expandBtn}
+                  className="flex items-center gap-2 mt-4 px-4 py-2 bg-[#1a1a1a] border border-gray-800 rounded-lg text-gray-400 text-[14px] cursor-pointer transition-all duration-150 hover:bg-[#222222] hover:text-cyan-400 hover:border-gray-700"
                   onClick={toggleCollapse}
                   title={isCollapsed ? "Show full output" : "Collapse output"}
                 >
                   {isCollapsed ? (
                     <>
-                      <ChevronDown size={14} />
+                      <ChevronDown size={16} />
                       <span>Show all {lineCount} lines</span>
                     </>
                   ) : (
                     <>
-                      <ChevronRight size={14} />
+                      <ChevronRight size={16} />
                       <span>Collapse</span>
                     </>
                   )}

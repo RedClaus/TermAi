@@ -1,37 +1,43 @@
 .overseer {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
     font-family: var(--font-mono);
     cursor: default;
     transition: all 0.2s ease;
     border: 1px solid transparent;
+    min-height: 36px;
 }
 
 .statusText {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
+    max-width: 180px;
+    font-weight: 500;
 }
 
 .healthy {
-    color: var(--success-color);
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.2);
 }
 
 .busy {
-    color: var(--warning-color);
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
 }
 
 .stalled {
-    color: var(--error-color);
-    background: rgba(var(--error-rgb), 0.1);
-    border-color: var(--error-color);
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
     cursor: pointer;
-    animation: flash 2s infinite;
+    animation: flash 1.5s infinite;
 }
 
 .pulse {

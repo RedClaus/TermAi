@@ -2,9 +2,10 @@
  * CodeBlock Component
  * Displays code with copy button and optional syntax highlighting
  */
-import React, { useState, useCallback, memo } from "react";
-import { Copy, Check, Play } from "lucide-react";
+import React, { memo, useCallback } from "react";
+import { Play } from "lucide-react";
 import styles from "./CodeBlock.module.css";
+import { CopyButton } from "./CopyButton";
 
 export interface CodeBlockProps {
   code: string;
@@ -220,18 +221,6 @@ export const CodeBlock = memo<CodeBlockProps>(
     onRun,
     maxHeight,
   }) => {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = useCallback(async () => {
-      try {
-        await navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-      }
-    }, [code]);
-
     const handleRun = useCallback(() => {
       onRun?.(code);
     }, [code, onRun]);
@@ -257,15 +246,7 @@ export const CodeBlock = memo<CodeBlockProps>(
               </button>
             )}
             {showCopy && (
-              <button
-                className={styles.actionBtn}
-                onClick={handleCopy}
-                title="Copy to clipboard"
-                type="button"
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                <span>{copied ? "Copied!" : "Copy"}</span>
-              </button>
+              <CopyButton text={code} className={styles.actionBtn} title="Copy to clipboard" />
             )}
           </div>
         </div>

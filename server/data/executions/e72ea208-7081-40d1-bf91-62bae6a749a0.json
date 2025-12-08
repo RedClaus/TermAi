@@ -1,0 +1,18 @@
+{
+  "executionId": "e72ea208-7081-40d1-bf91-62bae6a749a0",
+  "flowId": "8ee0f455-fa84-4235-89c0-095ae526039d",
+  "sessionId": "ed53d86e-98b2-4c4d-954e-2ea2d1fcf42b",
+  "results": {
+    "1": {
+      "nodeId": "1",
+      "status": "failed",
+      "startTime": 1764962550500,
+      "error": "Operation and filePath are required",
+      "duration": 0
+    }
+  },
+  "status": "failed",
+  "startTime": 1764962550499,
+  "endTime": 1764962550500,
+  "error": "Operation and filePath are required"
+}

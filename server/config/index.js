@@ -13,7 +13,7 @@ const config = {
   // CORS settings
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
-    : ["http://localhost:5173", "http://localhost:3000"],
+    : ["*"], // Allow all origins by default for local dev tool usability
 
   // Rate limiting
   rateLimit: {
@@ -29,6 +29,8 @@ const config = {
     gemini: process.env.GEMINI_API_KEY || null,
     openai: process.env.OPENAI_API_KEY || null,
     anthropic: process.env.ANTHROPIC_API_KEY || null,
+    xai: process.env.XAI_API_KEY || null,
+    openrouter: process.env.OPENROUTER_API_KEY || null,
   },
 
   // Ollama endpoint
@@ -46,6 +48,8 @@ const runtimeKeys = {
   gemini: null,
   openai: null,
   anthropic: null,
+  xai: null,
+  openrouter: null,
 };
 
 /**
@@ -59,7 +63,7 @@ function getApiKey(provider) {
  * Set API key at runtime (not persisted)
  */
 function setApiKey(provider, key) {
-  if (!["gemini", "openai", "anthropic"].includes(provider)) {
+  if (!["gemini", "openai", "anthropic", "xai", "openrouter"].includes(provider)) {
     throw new Error(`Invalid provider: ${provider}`);
   }
   runtimeKeys[provider] = key;

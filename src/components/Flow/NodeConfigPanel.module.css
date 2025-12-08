@@ -1,0 +1,215 @@
+/* NodeConfigPanel - Side panel for node configuration */
+
+.panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 320px;
+  background: var(--bg-primary, #11111b);
+  border-left: 1px solid var(--border-color, #313244);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #1e1e2e);
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.headerIcon {
+  display: flex;
+  align-items: center;
+  color: var(--accent-color, #6366f1);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-primary, #cdd6f4);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.configFields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field textarea,
+.field select {
+  padding: 8px 10px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 6px;
+  color: var(--text-primary, #cdd6f4);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent-color, #6366f1);
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.field select {
+  cursor: pointer;
+}
+
+.checkboxLabel {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px;
+  cursor: pointer;
+  text-transform: none !important;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-muted, #6c7086);
+  line-height: 1.4;
+}
+
+.variableHints {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-tertiary, #181825);
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #313244);
+}
+
+.variableHintsLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.variableList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.variableChip {
+  font-size: 10px;
+  padding: 3px 6px;
+  background: var(--bg-secondary, #1e1e2e);
+  border-radius: 4px;
+  color: var(--text-secondary, #a6adc8);
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #313244);
+  background: var(--bg-secondary, #1e1e2e);
+}
+
+.nodeId {
+  font-size: 10px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  color: var(--text-muted, #6c7086);
+}
+
+/* Input with button (for file browser) */
+.inputWithButton {
+  display: flex;
+  gap: 6px;
+}
+
+.inputWithButton input {
+  flex: 1;
+  min-width: 0;
+}
+
+.browseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color, #313244);
+  background: var(--bg-tertiary, #181825);
+  color: var(--text-secondary, #a6adc8);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.browseBtn:hover {
+  background: var(--bg-secondary, #1e1e2e);
+  border-color: var(--accent-color, #6366f1);
+  color: var(--accent-color, #6366f1);
+}

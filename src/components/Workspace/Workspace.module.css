@@ -15,6 +15,7 @@
     padding: 0 8px;
     background: var(--bg-secondary);
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 .layoutControls {
@@ -44,75 +45,56 @@
     color: var(--accent-primary);
 }
 
-.container {
+/* Main container - vertical split */
+.mainContainer {
     flex: 1;
     display: flex;
+    flex-direction: column;
     overflow: hidden;
     position: relative;
 }
 
+/* Terminal area (top) */
 .terminalArea {
-    flex: 1;
+    min-height: 150px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    /* Prevent flex overflow */
+    background: var(--bg-primary);
 }
 
-.aiArea {
-    border-left: 1px solid var(--border-color);
+/* Resize handle */
+.resizeHandle {
+    height: 8px;
     background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    cursor: row-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+    user-select: none;
+}
+
+.resizeHandle:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.resizeHandle.resizing {
+    background: var(--accent-primary);
+    color: white;
+}
+
+/* AI area (bottom) */
+.aiArea {
+    min-height: 200px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-}
-
-/* Layouts */
-.side-right {
-    flex-direction: row;
-}
-
-.side-right .aiArea {
-    width: 350px;
-    border-left: 1px solid var(--border-color);
-    border-top: none;
-}
-
-.side-left {
-    flex-direction: row-reverse;
-}
-
-.side-left .aiArea {
-    width: 350px;
-    border-right: 1px solid var(--border-color);
-    border-left: none;
-    border-top: none;
-}
-
-.bottom {
-    flex-direction: column;
-}
-
-.bottom .aiArea {
-    height: 300px;
+    background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
-    border-left: none;
-}
-
-.top {
-    flex-direction: column-reverse;
-}
-
-.top .aiArea {
-    height: 300px;
-    border-bottom: 1px solid var(--border-color);
-    border-left: none;
-    border-top: none;
-}
-
-.aiHidden .terminalArea {
-    flex: 1;
-    width: 100%;
-    height: 100%;
 }

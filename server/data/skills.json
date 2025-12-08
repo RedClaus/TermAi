@@ -34,5 +34,41 @@
         "action": "./run_app.sh or python main.py"
       }
     ]
+  },
+  {
+    "id": "8220c5ab-5f3b-402c-a4f4-34f8c63f588e",
+    "timestamp": 1764802360646,
+    "use_when": "Installing a Go application that has pre-built binaries",
+    "preferences": "prefers using pre-built binaries over compiling from source",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "cd project_directory && ls -la to check for executables"
+      }
+    ]
+  },
+  {
+    "id": "f72b69e0-2bd3-4c3d-bdf1-55e48c82dc3d",
+    "timestamp": 1764802375402,
+    "use_when": "Installing a Go application from source code",
+    "preferences": "prefers checking project structure and dependencies before installation",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "ls -la *.go *.mod to check for Go project files"
+      }
+    ]
+  },
+  {
+    "id": "cc7984b4-ec72-4b06-90d8-3d9c3189abb2",
+    "timestamp": 1764802423932,
+    "use_when": "Installing a Go application from source code",
+    "preferences": "prefers checking for pre-built binaries before building from source",
+    "tool_sops": [
+      {
+        "tool_name": "bash",
+        "action": "go build . or go run . to build/run Go applications"
+      }
+    ]
   }
 ]

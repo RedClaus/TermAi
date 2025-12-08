@@ -1,0 +1,168 @@
+/* NodePalette - Drag and drop node palette */
+
+.palette {
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #313244);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg-tertiary, #181825);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: grab;
+  transition: all 0.15s ease;
+}
+
+.item:hover {
+  border-color: var(--accent-color, #6366f1);
+  background: var(--bg-hover, #1e1e2e);
+}
+
+.item:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.itemIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-secondary, #1e1e2e);
+  border-radius: 6px;
+  color: var(--accent-color, #6366f1);
+}
+
+.itemInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #cdd6f4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemDesc {
+  font-size: 11px;
+  color: var(--text-secondary, #a6adc8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Section divider */
+.sectionDivider {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #313244);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sectionDivider svg {
+  color: #a855f7;
+}
+
+/* Learned skill item */
+.learnedSkillItem {
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.learnedSkillItem:hover {
+  border-color: #a855f7;
+}
+
+.learnedSkillItem .itemIcon {
+  color: #a855f7;
+}
+
+/* Empty state */
+.emptyState {
+  font-size: 11px;
+  color: var(--text-secondary, #a6adc8);
+  text-align: center;
+  padding: 12px 8px;
+  font-style: italic;
+}
+
+/* Loading state */
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: var(--text-secondary, #a6adc8);
+}
+
+.loadingState svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Import Button */
+.importButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 6px;
+  color: var(--accent-color, #6366f1);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.importButton:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--accent-color, #6366f1);
+}
+
+.importButton:active {
+  transform: scale(0.98);
+}

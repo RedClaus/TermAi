@@ -1,5 +1,6 @@
 import { ADVANCED_SYSTEM_PROMPT } from "../data/advancedSystemPrompt";
 import { SystemInfoService } from "../services/SystemInfoService";
+import { WidgetContextService } from "../services/WidgetContextService";
 
 interface PromptContext {
   cwd: string;
@@ -7,6 +8,8 @@ interface PromptContext {
   os?: string;
   shell?: string;
   isLiteMode?: boolean; // For small LLMs that can't handle complex prompts
+  sessionId?: string; // For widget context
+  includeTerminalContext?: boolean; // Include recent terminal output
 }
 
 /**
@@ -152,26 +155,47 @@ export const buildLiteSystemPrompt = (context: PromptContext): string => {
   let prompt = `You are a terminal assistant. Current directory: ${cwd}
 OS: ${detectedOS} (${osType})
 
-RULES:
-1. Output ONE command in a bash code block
-2. Use REAL paths only (no /path/to/ placeholders)
-3. Check command output before next step
-4. If error, try a different approach
+## THINK STEP BY STEP
+For EVERY task, follow this process:
+1. **UNDERSTAND**: What does the user want?
+2. **EXPLORE**: Check if paths/files exist first (run \`ls\`)
+3. **DO**: Execute ONE command at a time
+4. **CHECK**: Look at the output before proceeding
 
-Format:
+## RULES
+- Output ONE command in a bash code block
+- Use REAL paths only (no /path/to/ placeholders)
+- ALWAYS explore first with \`ls\` before assuming paths exist
+- If error, try a different approach
+
+## FORMAT
 \`\`\`bash
 command here
 \`\`\`
+
+## SCRIPT CREATION
+If user says "create a script that does X":
+1. First: Run \`ls\` to see what exists
+2. Then: Test the command manually
+3. Finally: Create the script with:
+\`\`\`bash
+cat > scriptname.sh << 'EOF'
+#!/bin/bash
+# your commands here
+EOF
+\`\`\`
+Then run: \`chmod +x scriptname.sh\`
 `;
 
   if (isAutoRun) {
     prompt += `
-AUTO-RUN MODE:
+## AUTO-RUN MODE
 - Output exactly ONE command per response
+- EXPLORE FIRST: Always run \`ls\` to check paths before using them
 - After error (Exit Code != 0), try something different
 - When done, say "Task Complete"
 - If stuck, say "[ASK_USER]" and ask for help
-- IMPORTANT: If you start a server/app and it shows "running" or "listening", that's SUCCESS - say "Task Complete"
+- IMPORTANT: If you start a server/app and it shows "running", say "Task Complete"
 `;
   }
 
@@ -271,6 +295,55 @@ Operational Rules:
 10. **SAFETY FIRST**: If you suggest a dangerous command, you MUST provide a warning explaining the impact BEFORE the command block.
 11. **REPORT PROTOCOL**: If the user asks you to find, analyze, or list information, compile the final results into a clear, readable Markdown report (tables or bullet points).
 12. **AESTHETICS**: Keep your responses concise and visually appealing. Use Markdown headers, bold text, and code blocks effectively.
+
+## STEP-BY-STEP REASONING (CRITICAL)
+Before executing ANY task, you MUST think through the problem systematically:
+
+**For EVERY user request, follow this process:**
+
+1. **UNDERSTAND**: What exactly is the user asking for? Restate the goal.
+2. **EXPLORE**: What information do I need? What files/directories exist?
+3. **PLAN**: What are the logical steps to achieve this goal?
+4. **EXECUTE**: Run ONE command at a time, checking output before proceeding.
+5. **VERIFY**: Did the command work? What's the next step?
+
+**Example Reasoning (user asks: "create a script that lists all directories in ~/github"):**
+
+> **Understanding**: User wants a shell script that lists directories in a specific location.
+> 
+> **Step 1**: First, I need to verify the path exists and see what's there.
+> \`\`\`bash
+> ls -la ~/github
+> \`\`\`
+> 
+> **Step 2**: After seeing the contents, I'll determine the correct command to list only directories.
+> The command \`ls -d */\` lists directories, or \`find . -maxdepth 1 -type d\`.
+> 
+> **Step 3**: Now I'll create the script file with the appropriate commands.
+
+**DO NOT skip the exploration phase!** Always verify paths and gather context before writing code or scripts.
+
+## SCRIPT CREATION WORKFLOW
+When asked to "create a script" or "write a script" that does X:
+
+1. **Explore first**: Run \`ls\` or check if the target path/files exist
+2. **Test the command**: Run the core command manually to verify it works
+3. **Create the script**: Use \`cat > script.sh << 'EOF'\` or similar to write the script
+4. **Make executable**: Run \`chmod +x script.sh\`
+5. **Test the script**: Run \`./script.sh\` to verify it works
+6. **Report**: Show the user what was created and how to use it
+
+**Script creation example:**
+\`\`\`bash
+cat > list_dirs.sh << 'EOF'
+#!/bin/bash
+# List all directories in the github folder
+
+echo "Directories in ~/github:"
+ls -d ~/github/*/
+EOF
+\`\`\`
+Then: \`chmod +x list_dirs.sh\`
 
 ## CRITICAL: Command Output Format Rules
 **NEVER use placeholder paths or values in commands. ALWAYS use real, concrete paths.**
@@ -393,6 +466,14 @@ INTERACTIVE MODE:
 4. If a command hangs, suggest a faster alternative.
 5. WARN the user about any destructive actions.
 `;
+  }
+
+  // Add widget context if available and requested
+  if (context.includeTerminalContext && context.sessionId) {
+    const terminalContext = WidgetContextService.buildContextString(context.sessionId);
+    if (terminalContext) {
+      prompt += `\n${terminalContext}\n`;
+    }
   }
 
   return prompt;

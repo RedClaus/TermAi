@@ -1,24 +1,16 @@
 import React from "react";
 import { Plus, Folder, Copy, Clock } from "lucide-react";
 import styles from "./Dashboard.module.css";
-import { AIInputBox } from "./AIInputBox";
 
 interface DashboardProps {
   onCommand: (cmd: string) => void;
-  sessionId?: string | undefined;
-  cwd?: string | undefined;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   onCommand,
-  sessionId,
-  cwd,
 }) => {
   return (
     <div className={styles.container}>
-      {/* AI Input Area */}
-      <AIInputBox onCommand={onCommand} sessionId={sessionId} cwd={cwd} />
-
       {/* Quick Actions */}
       <div className={styles.actionsGrid}>
         <button

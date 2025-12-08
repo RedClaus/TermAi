@@ -82,6 +82,52 @@
   background: var(--bg-secondary);
 }
 
+/* Action Toolbar - sits above input box */
+.actionToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--ai-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.toolbarLeft,
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--ai-border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbarBtn:hover {
+  background: var(--bg-secondary);
+  color: var(--ai-primary);
+  border-color: var(--ai-primary);
+}
+
+.autoRunLabel {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .contextChips {
   display: flex;
   gap: 8px;
@@ -97,6 +143,24 @@
   border-radius: 4px;
   font-size: 11px;
   color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.chip:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Context active chip - shows when AI has terminal context */
+.contextActive {
+  background: rgba(203, 166, 247, 0.15);
+  border: 1px solid var(--ai-border);
+  color: var(--ai-primary);
+}
+
+.contextActive:hover {
+  background: rgba(203, 166, 247, 0.25);
+  border-color: var(--ai-primary);
 }
 
 .inputBox {
@@ -120,6 +184,9 @@
   max-height: 120px;
   line-height: 1.4;
   transition: all 0.2s ease;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .textarea:focus {
@@ -184,13 +251,15 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  width: 28px;
-  height: 28px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   cursor: pointer;
   color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.15s ease;
 }
 
@@ -222,13 +291,15 @@
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid var(--error);
   border-radius: 6px;
-  width: 28px;
-  height: 28px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   cursor: pointer;
   color: var(--error);
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.15s ease;
 }
 

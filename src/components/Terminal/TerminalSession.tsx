@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Block } from "./Block";
 import { InputArea } from "./InputArea";
 import { InteractiveBlock } from "./InteractiveBlock";
-import { AIInputBox } from "./AIInputBox";
-import { GripHorizontal } from "lucide-react";
 import type { BlockData } from "../../types";
 import type {
   RunCommandPayload,
@@ -12,12 +10,9 @@ import type {
 import { executeCommand, cancelCommand } from "../../utils/commandRunner";
 import { emit } from "../../events";
 import { useTermAiEvent } from "../../hooks/useTermAiEvent";
-import styles from "./TerminalSession.module.css";
+import { InitialCwdService } from "../../services/InitialCwdService";
+import { PathCorrectionDialog } from "../AI/PathCorrectionDialog";
 import { v4 as uuidv4 } from "uuid";
-
-const MIN_AI_HEIGHT = 80;
-const MAX_AI_HEIGHT = 400;
-const DEFAULT_AI_HEIGHT = 140;
 
 interface TerminalSessionProps {
   sessionId?: string;
@@ -28,58 +23,43 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
 }) => {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [cwd, setCwd] = useState("~");
-  const [aiBoxHeight, setAiBoxHeight] = useState(() => {
-    const saved = localStorage.getItem("termai_ai_box_height");
-    return saved ? parseInt(saved, 10) : DEFAULT_AI_HEIGHT;
-  });
-  const [isResizing, setIsResizing] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [pathCorrection, setPathCorrection] = useState<{
+    originalPath: string;
+    serverPath: string;
+    reason: string;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentCommandRef = useRef<string | null>(null);
-  const resizeRef = useRef<HTMLDivElement>(null);
 
-  // Handle resize drag
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
-
+  // Fetch initial CWD from server (set by CLI launch)
   useEffect(() => {
-    if (!isResizing) return;
+    const initCwd = async () => {
+      // First check localStorage for session-specific CWD
+      if (sessionId) {
+        const storedCwd = localStorage.getItem(`termai_cwd_${sessionId}`);
+        if (storedCwd) {
+          setCwd(storedCwd);
+          setIsInitialized(true);
+          return;
+        }
+      }
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const container = resizeRef.current?.parentElement;
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const newHeight = e.clientY - containerRect.top;
-      const clampedHeight = Math.min(
-        MAX_AI_HEIGHT,
-        Math.max(MIN_AI_HEIGHT, newHeight),
-      );
-      setAiBoxHeight(clampedHeight);
+      // Otherwise, fetch the initial CWD from server
+      try {
+        const { cwd: initialCwd, isCliLaunch } = await InitialCwdService.getInitialCwd();
+        console.log("[TerminalSession] Initial CWD:", initialCwd, "CLI Launch:", isCliLaunch);
+        setCwd(initialCwd);
+      } catch (error) {
+        console.error("[TerminalSession] Failed to fetch initial CWD:", error);
+        setCwd("~"); // Fallback
+      } finally {
+        setIsInitialized(true);
+      }
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      localStorage.setItem("termai_ai_box_height", aiBoxHeight.toString());
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isResizing, aiBoxHeight]);
-
-  // Load history specific to session if provided
-  useEffect(() => {
-    if (sessionId) {
-      const storedCwd = localStorage.getItem(`termai_cwd_${sessionId}`);
-      if (storedCwd) setCwd(storedCwd);
-      setBlocks([]);
-    }
+    initCwd();
+    setBlocks([]);
   }, [sessionId]);
 
   // Save CWD and emit event for AI (scoped)
@@ -194,6 +174,11 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
         if (result.newCwd) {
           setCwd(result.newCwd);
           emit("termai-cwd-changed", { cwd: result.newCwd, sessionId });
+        }
+
+        // Handle CWD correction (path not found)
+        if (result.cwdFallback) {
+          setPathCorrection(result.cwdFallback);
         }
 
         // Emit output event for System Overseer
@@ -317,26 +302,18 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
   );
 
   return (
-    <div className={styles.container}>
-      {/* Persistent AI Input Box at top */}
-      <div
-        className={styles.aiBoxWrapper}
-        style={{ height: aiBoxHeight }}
-        ref={resizeRef}
+    <div className="flex flex-col h-full w-full bg-gradient-to-br from-[#0d1117] to-[#0a0e14] overflow-hidden">
+      {/* Terminal output area - more generous padding */}
+      <div 
+        className="flex-1 overflow-y-auto px-6 py-6 pb-2 scroll-smooth scrollbar-hide md:px-10"
+        ref={scrollRef}
       >
-        <AIInputBox onCommand={handleExecute} sessionId={sessionId} cwd={cwd} />
-      </div>
-
-      {/* Resize handle */}
-      <div
-        className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ""}`}
-        onMouseDown={handleMouseDown}
-      >
-        <GripHorizontal size={16} />
-      </div>
-
-      {/* Terminal output area */}
-      <div className={styles.scrollArea} ref={scrollRef}>
+        {blocks.length === 0 && isInitialized && (
+          <div className="flex flex-col items-center justify-center p-12 text-gray-400 text-center">
+            <p className="text-base">Terminal ready in <code className="text-cyan-400 bg-[#1c2128] px-2.5 py-1 rounded-lg font-mono">{cwd}</code></p>
+            <p className="text-sm mt-3 text-gray-500">Commands from AI will appear here, or type below to run directly.</p>
+          </div>
+        )}
         {blocks.map((block) =>
           block.isInteractive ? (
             <InteractiveBlock
@@ -351,6 +328,25 @@ export const TerminalSession: React.FC<TerminalSessionProps> = ({
         )}
       </div>
       <InputArea onExecute={handleExecute} cwd={cwd} />
+      
+      {/* Path Correction Dialog */}
+      {pathCorrection && (
+        <PathCorrectionDialog
+          originalPath={pathCorrection.originalPath}
+          serverPath={pathCorrection.serverPath}
+          reason={pathCorrection.reason}
+          onDismiss={() => setPathCorrection(null)}
+          onClone={() => {
+            setPathCorrection(null);
+            handleExecute(`cd ~/github && echo "Cloning repo..."`); 
+            // The user would likely need to paste the URL, so we just prep the dir
+          }}
+          onUseLocalAgent={() => {
+            setPathCorrection(null);
+            window.open('/bin/local-agent.cjs', '_blank');
+          }}
+        />
+      )}
     </div>
   );
 };

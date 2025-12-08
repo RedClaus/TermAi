@@ -1,6 +1,6 @@
 # TermAI
 
-An AI-powered terminal assistant that bridges natural language and command-line operations. Features a modern UI with multi-provider AI support, skill learning, auto-run capabilities, and Docker deployment.
+An AI-powered terminal assistant that bridges natural language and command-line operations. Features a modern UI with multi-provider AI support, skill learning, auto-run capabilities, CLI launcher, and Docker deployment.
 
 ## Features
 
@@ -15,18 +15,20 @@ An AI-powered terminal assistant that bridges natural language and command-line 
 - **Multi-Tab Sessions**: Run multiple terminal sessions simultaneously
 - **Interactive Mode**: Full PTY support for SSH, vim, and other interactive programs
 - **Working Directory Tracking**: Context-aware command execution
+- **CLI Launcher**: Run `termai` from any directory to start in that project
 
 ### UI/UX
-- **Embedded AI Chat**: AI assistant integrated directly into terminal view
-- **Resizable Panels**: Drag to resize AI and terminal areas
-- **Layout Options**: AI panel on left, right, top, or bottom
+- **Split Panel Layout**: Terminal on top, AI panel on bottom (both resizable)
+- **Drag-to-Resize**: Adjust panel sizes with the grip handle
 - **Light/Dark Themes**: Toggle between themes
+- **Git Branch Display**: Shows current branch in context chips
 - **File Browser**: Browse and navigate filesystem from AI panel
 
 ### Automation
 - **Auto-Run Mode**: Let AI execute command sequences autonomously
 - **Safety Confirmations**: Dangerous commands require approval
 - **Task Completion Summaries**: View what was accomplished after auto-run
+- **Command Preview Mode**: Review commands before execution in auto-run
 
 ## Quick Start
 
@@ -49,6 +51,34 @@ npm run dev:all
 ```
 
 Open http://localhost:5173 in your browser.
+
+### Global CLI Installation (Recommended)
+
+Run TermAI from any directory on your system:
+
+```bash
+# Create wrapper script
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/termai << 'EOF'
+#!/bin/bash
+TERMAI_DIR="$HOME/github/TermAi"  # Update this path
+exec node "$TERMAI_DIR/bin/termai.cjs" "$@"
+EOF
+chmod +x ~/.local/bin/termai
+
+# Ensure ~/.local/bin is in your PATH
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Now you can run from any project:
+
+```bash
+cd ~/my-project
+termai              # Starts TermAI in your project directory
+termai --help       # Show help
+termai --version    # Show version
+```
 
 ### Docker Deployment
 
@@ -100,16 +130,28 @@ For local AI without API keys:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│                     CLI (bin/termai.cjs)                     │
+│         Captures CWD, starts servers, opens browser          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
 │                        Frontend (React)                      │
 │                         Port: 5173                           │
 ├─────────────────────────────────────────────────────────────┤
-│  TerminalTabs → Workspace → TerminalSession + AIPanel/Box   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              Terminal Session (TOP)                  │    │
+│  │  - Command blocks and output                         │    │
+│  │  - Direct command input                              │    │
+│  ├─────────────────────────────────────────────────────┤    │
+│  │  ═══════════ Resizable Divider ═══════════         │    │
+│  ├─────────────────────────────────────────────────────┤    │
+│  │              AI Panel (BOTTOM)                       │    │
+│  │  - Chat interface with context chips                 │    │
+│  │  - Auto-run controls and model selector              │    │
+│  └─────────────────────────────────────────────────────┘    │
 │                                                              │
-│  Services:                                                   │
-│  - LLMManager (AI provider abstraction)                      │
-│  - SessionManager (tab/session persistence)                  │
-│  - KnowledgeService (skill learning API)                     │
-│  - FileSystemService (file operations)                       │
+│  Services: LLMManager, SessionManager, KnowledgeService,     │
+│            InitialCwdService, WidgetContextService           │
 └──────────────────────────┬──────────────────────────────────┘
                            │ REST + WebSocket
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -118,6 +160,7 @@ For local AI without API keys:
 ├─────────────────────────────────────────────────────────────┤
 │  Routes:                                                     │
 │  - /api/execute - Command execution                          │
+│  - /api/initial-cwd - Returns CLI launch directory           │
 │  - /api/llm/* - AI provider proxy (keys stored here)         │
 │  - /api/knowledge/* - Skill learning storage                 │
 │  - /api/fs/* - File system operations                        │
@@ -129,14 +172,16 @@ For local AI without API keys:
 
 ```
 TermAi/
+├── bin/                    # CLI entry point
+│   └── termai.cjs         # Global CLI launcher
 ├── src/                    # Frontend source
 │   ├── components/
 │   │   ├── AI/            # AI panel, chat, model selector
 │   │   ├── Terminal/      # Terminal session, blocks, input
 │   │   ├── Settings/      # Settings modal, skill viewer
 │   │   ├── Shell/         # App shell, sidebar
-│   │   └── Workspace/     # Layout, system overseer
-│   ├── services/          # API clients (LLM, Knowledge, FS)
+│   │   └── Workspace/     # Layout (terminal top, AI bottom)
+│   ├── services/          # API clients (LLM, Knowledge, FS, InitialCwd)
 │   ├── hooks/             # React hooks (autorun, observer, etc)
 │   ├── data/              # System prompts, model definitions
 │   └── events/            # Custom event system
@@ -173,6 +218,11 @@ npm run build
 
 # Lint
 npm run lint
+
+# Run via CLI (from any directory)
+termai                # Start in current directory
+termai --help         # Show CLI help
+termai --version      # Show version
 ```
 
 ### Adding a New AI Provider

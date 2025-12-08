@@ -1,0 +1,229 @@
+[
+  {
+    "id": "fc9c87ea-686e-4c48-8749-41c61abf2024",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 0,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:29:03.049Z",
+    "completedAt": "2025-12-08T01:29:05.215Z"
+  },
+  {
+    "id": "93e46862-7840-422d-aada-93468b345987",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 0,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:35:51.556Z",
+    "completedAt": "2025-12-08T01:35:52.510Z"
+  },
+  {
+    "id": "9c3d6707-95d0-4421-9ff6-077e89319275",
+    "status": "complete",
+    "files": [
+      {
+        "name": "test.json",
+        "size": 17,
+        "detectedFormat": "markdown",
+        "status": "failed",
+        "error": "Unknown format"
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 0,
+      "candidatesExtracted": 0,
+      "errors": [
+        "test.json: Unknown format"
+      ]
+    },
+    "createdAt": "2025-12-08T01:41:37.049Z",
+    "completedAt": "2025-12-08T01:41:37.057Z"
+  },
+  {
+    "id": "84512933-83b5-435a-9533-395dd8241389",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 1,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:42:38.924Z",
+    "completedAt": "2025-12-08T01:42:44.016Z"
+  },
+  {
+    "id": "b27facda-48dc-4e62-81c3-38902211d302",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 1,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:46:07.011Z",
+    "completedAt": "2025-12-08T01:46:12.045Z"
+  },
+  {
+    "id": "8714c41d-e800-4949-9df2-5314754a5fd5",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 1,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:46:43.927Z",
+    "completedAt": "2025-12-08T01:46:47.748Z"
+  },
+  {
+    "id": "1c560251-d4e9-453e-9b66-60eae58c1263",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 0,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:50:41.245Z",
+    "completedAt": "2025-12-08T01:50:42.437Z"
+  },
+  {
+    "id": "d42b05fb-f3f4-4b2f-8be8-154602ca8fd7",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 0,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:52:06.512Z",
+    "completedAt": "2025-12-08T01:52:08.672Z"
+  },
+  {
+    "id": "fa026888-5548-43dd-9ee5-8efbb1111c6e",
+    "status": "complete",
+    "files": [
+      {
+        "name": "convo.md",
+        "size": 23543,
+        "detectedFormat": "markdown",
+        "status": "complete",
+        "conversationsFound": 1
+      }
+    ],
+    "progress": {
+      "current": 1,
+      "total": 1,
+      "phase": "Complete"
+    },
+    "results": {
+      "conversationsFound": 1,
+      "candidatesExtracted": 0,
+      "errors": []
+    },
+    "createdAt": "2025-12-08T01:56:54.101Z",
+    "completedAt": "2025-12-08T01:56:55.349Z"
+  }
+]
